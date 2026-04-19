@@ -3,6 +3,7 @@ import { UserButton } from "@clerk/nextjs";
 import { and, desc, eq } from "drizzle-orm";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { TimezoneSync } from "@/components/providers/timezone-sync";
+import { AsanaHeaderStatus } from "@/components/integrations/asana-header-status";
 import { db } from "@/lib/db";
 import { asanaConnections, syncRuns } from "@/lib/db/schema";
 
@@ -51,11 +52,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </nav>
           </div>
           <div className="flex items-center gap-4">
-            <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-300">
-              <p className="font-medium text-zinc-100">Asana: {connection ? "Connected" : "Not Connected"}</p>
-              <p>Last sync: {latestSyncLabel}</p>
-              <p>Timezone: {user?.timezone ?? "UTC"}</p>
-            </div>
+            <AsanaHeaderStatus
+              asanaConnected={Boolean(connection)}
+              lastSyncLabel={latestSyncLabel}
+              timezone={user?.timezone ?? "UTC"}
+            />
             <UserButton />
           </div>
         </div>
