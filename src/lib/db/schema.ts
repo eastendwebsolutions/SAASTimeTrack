@@ -51,6 +51,8 @@ export const users = pgTable("users", {
 export const projects = pgTable("projects", {
   id: uuid("id").defaultRandom().primaryKey(),
   companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  /** Asana data is cached per user OAuth — no org-wide Asana install required. */
+  syncedByUserId: uuid("synced_by_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   asanaProjectId: varchar("asana_project_id", { length: 100 }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   isActive: boolean("is_active").notNull().default(true),
@@ -58,13 +60,15 @@ export const projects = pgTable("projects", {
   ...timestamps,
 }, (table) => ({
   companyActiveIdx: index("projects_company_active_idx").on(table.companyId, table.isActive),
-  asanaProjectCompanyUnique: uniqueIndex("projects_company_asana_unique").on(table.companyId, table.asanaProjectId),
+  userActiveIdx: index("projects_user_active_idx").on(table.syncedByUserId, table.isActive),
+  /** Same Asana project may appear once per user who synced it. */
+  asanaProjectPerUserUnique: uniqueIndex("projects_user_asana_unique").on(table.syncedByUserId, table.asanaProjectId),
 }));
 
 export const tasks = pgTable("tasks", {
   id: uuid("id").defaultRandom().primaryKey(),
   projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
-  asanaTaskId: varchar("asana_task_id", { length: 100 }).notNull().unique(),
+  asanaTaskId: varchar("asana_task_id", { length: 100 }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   assignedUserId: uuid("assigned_user_id").references(() => users.id),
   parentTaskId: uuid("parent_task_id"),
@@ -73,6 +77,7 @@ export const tasks = pgTable("tasks", {
   ...timestamps,
 }, (table) => ({
   assignedIdx: index("tasks_assigned_active_idx").on(table.assignedUserId, table.isActive),
+  projectAsanaUnique: uniqueIndex("tasks_project_asana_unique").on(table.projectId, table.asanaTaskId),
 }));
 
 export const timesheets = pgTable("timesheets", {

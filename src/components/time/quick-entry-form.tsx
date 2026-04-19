@@ -81,6 +81,8 @@ export function QuickEntryForm({ projects, tasks }: Props) {
   const [startedAt, setStartedAt] = useState<Date | null>(null);
   const [timerNow, setTimerNow] = useState<Date>(new Date());
   const [segments, setSegments] = useState<Segment[]>([]);
+  const [manualTimeIn, setManualTimeIn] = useState("");
+  const [manualTimeOut, setManualTimeOut] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -144,9 +146,12 @@ export function QuickEntryForm({ projects, tasks }: Props) {
   const combinedSeconds = totalTrackedSeconds + elapsedSeconds;
   const hasCrossedMidnight = startedAt ? !isSameLocalDate(startedAt, timerNow) : false;
   const effectiveEntryDate = startedAt ? toLocalDateValue(startedAt) : toLocalDateValue(timerNow);
-  const isLockedToTask = startedAt !== null || segments.length > 0;
+  const manualRangeActive = Boolean(manualTimeIn && manualTimeOut);
+  const isLockedToTask = startedAt !== null || segments.length > 0 || manualRangeActive;
 
   function startTimer() {
+    setManualTimeIn("");
+    setManualTimeOut("");
     setStartedAt(new Date());
     setMessage(null);
   }
@@ -165,14 +170,32 @@ export function QuickEntryForm({ projects, tasks }: Props) {
   async function saveEntries(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage(null);
-    if (!selectedProject || !selectedTask || !summary.trim() || segments.length === 0) {
-      setMessage("Select project/task, add summary, and capture at least one stopped segment.");
+    if (!selectedProject || !selectedTask || !summary.trim()) {
+      setMessage("Select project/task and enter a summary.");
+      return;
+    }
+
+    const segmentSources: Segment[] =
+      segments.length > 0
+        ? segments
+        : manualTimeIn && manualTimeOut
+          ? [{ start: new Date(manualTimeIn), end: new Date(manualTimeOut) }]
+          : [];
+
+    if (segmentSources.length === 0) {
+      setMessage("Use Start/Stop timer segments, or enter Time in and Time out.");
+      return;
+    }
+
+    const last = segmentSources[segmentSources.length - 1]!;
+    if (last.end.getTime() <= last.start.getTime()) {
+      setMessage("Time out must be after time in.");
       return;
     }
 
     setIsSaving(true);
     try {
-      for (const segment of segments) {
+      for (const segment of segmentSources) {
         const chunks = splitSegmentByDay(segment);
         for (const chunk of chunks) {
           const response = await fetch("/api/time-entries", {
@@ -197,6 +220,8 @@ export function QuickEntryForm({ projects, tasks }: Props) {
       }
 
       setSegments([]);
+      setManualTimeIn("");
+      setManualTimeOut("");
       setSummary("");
       setSubtaskSearch("");
       setMessage("Time entries saved.");
@@ -275,14 +300,43 @@ export function QuickEntryForm({ projects, tasks }: Props) {
         </datalist>
       </label>
 
-      <div className="flex flex-col gap-2 text-sm">
-        <span>Time Tracking ({effectiveEntryDate})</span>
+      <div className="flex flex-col gap-2 text-sm md:col-span-2">
+        <span className="font-medium text-zinc-200">Time in / Time out (required)</span>
+        <p className="text-xs text-zinc-500">
+          Either use the timer below for one or more segments, or enter explicit times (splits across midnight automatically).
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-zinc-500">Time in</span>
+            <input
+              type="datetime-local"
+              className="rounded-md border border-zinc-700 bg-zinc-950 p-2"
+              value={manualTimeIn}
+              onChange={(event) => setManualTimeIn(event.target.value)}
+              disabled={!selectedProject || !selectedTask || segments.length > 0 || startedAt !== null}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-zinc-500">Time out</span>
+            <input
+              type="datetime-local"
+              className="rounded-md border border-zinc-700 bg-zinc-950 p-2"
+              value={manualTimeOut}
+              onChange={(event) => setManualTimeOut(event.target.value)}
+              disabled={!selectedProject || !selectedTask || segments.length > 0 || startedAt !== null}
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 text-sm md:col-span-2">
+        <span>Timer ({effectiveEntryDate})</span>
         <div className="flex items-center gap-3">
           <Button
             type="button"
             variant={startedAt ? "danger" : "primary"}
             onClick={startedAt ? stopTimer : startTimer}
-            disabled={!selectedProject || !selectedTask}
+            disabled={!selectedProject || !selectedTask || manualRangeActive}
           >
             {startedAt ? "Stop Timer" : "Start Timer"}
           </Button>
@@ -307,10 +361,19 @@ export function QuickEntryForm({ projects, tasks }: Props) {
       </label>
 
       <div className="col-span-full flex items-center justify-between">
-        <span className="text-xs text-zinc-500">Use Start/Stop repeatedly to capture multiple segments for one task.</span>
+        <span className="text-xs text-zinc-500">
+          Timer: Start/Stop for multiple segments. Or fill Time in / Time out for a single range. Summary is always required.
+        </span>
         <Button
           type="submit"
-          disabled={startedAt !== null || !selectedProject || !selectedTask || !summary.trim() || segments.length === 0 || isSaving}
+          disabled={
+            startedAt !== null ||
+            !selectedProject ||
+            !selectedTask ||
+            !summary.trim() ||
+            isSaving ||
+            (segments.length === 0 && !(manualTimeIn && manualTimeOut))
+          }
         >
           {isSaving ? "Saving..." : "Save Entry"}
         </Button>

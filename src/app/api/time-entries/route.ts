@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { timeEntries } from "@/lib/db/schema";
 import { getWeekBounds } from "@/lib/services/week";
 import { getDurationMinutes, timeEntryPayloadSchema } from "@/lib/validation/time-entry";
+import { assertProjectTaskOwnedByUser } from "@/lib/validation/time-entry-ownership";
 
 export async function GET(request: NextRequest) {
   const user = await getOrCreateCurrentUser();
@@ -48,6 +49,17 @@ export async function POST(request: NextRequest) {
 
   const payload = timeEntryPayloadSchema.parse(parsedPayload);
   const durationMinutes = getDurationMinutes(payload.timeIn, payload.timeOut);
+
+  try {
+    await assertProjectTaskOwnedByUser({
+      ownerUserId: user.id,
+      projectId: payload.projectId,
+      taskId: payload.taskId,
+      subtaskId: payload.subtaskId,
+    });
+  } catch {
+    return NextResponse.json({ error: "Invalid project or task for your account" }, { status: 403 });
+  }
 
   const [entry] = await db
     .insert(timeEntries)

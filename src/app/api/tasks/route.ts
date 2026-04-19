@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const companyProjects = await db.query.projects.findMany({
-    where: eq(projects.companyId, user.companyId),
+    where: and(eq(projects.companyId, user.companyId), eq(projects.syncedByUserId, user.id)),
     columns: { id: true },
   });
   const companyProjectIds = companyProjects.map((project) => project.id);

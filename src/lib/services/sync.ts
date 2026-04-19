@@ -1,11 +1,14 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { asanaFetch } from "@/lib/asana/client";
 import { db } from "@/lib/db";
 import { asanaConnections, companies, projects, syncRuns, tasks, users } from "@/lib/db/schema";
 import { decrypt } from "@/lib/utils/crypto";
 
 type AsanaWorkspacesResponse = { data: Array<{ gid: string; name: string }> };
-type AsanaProjectsResponse = { data: Array<{ gid: string; name: string; archived?: boolean }> };
+type AsanaProjectsResponse = {
+  data: Array<{ gid: string; name: string; archived?: boolean }>;
+  next_page?: { offset?: string | null } | null;
+};
 type AsanaTasksResponse = {
   data: Array<{
     gid: string;
@@ -21,13 +24,40 @@ function truncateName(name: string, maxLength = 255) {
   return name.length <= maxLength ? name : name.slice(0, maxLength);
 }
 
-async function fetchProjectTasksPaginated(projectGid: string, accessToken: string) {
+async function fetchWorkspaceProjectsPaginated(workspaceGid: string, accessToken: string) {
+  const allProjects: AsanaProjectsResponse["data"] = [];
+  let offset: string | null = null;
+
+  do {
+    const params = new URLSearchParams({
+      workspace: workspaceGid,
+      archived: "false",
+      limit: "100",
+      opt_fields: "gid,name,archived",
+    });
+    if (offset) params.set("offset", offset);
+
+    const page = await asanaFetch<AsanaProjectsResponse>(`/projects?${params.toString()}`, accessToken);
+    for (const project of page.data) {
+      if (!project.archived) {
+        allProjects.push(project);
+      }
+    }
+    offset = page.next_page?.offset ?? null;
+  } while (offset);
+
+  return allProjects;
+}
+
+/** Tasks assigned to the connected user only (`assignee=me`). Paginated. */
+async function fetchProjectTasksAssignedToMePaginated(projectGid: string, accessToken: string) {
   const allTasks: AsanaTasksResponse["data"] = [];
   let offset: string | null = null;
 
   do {
     const params = new URLSearchParams({
       project: projectGid,
+      assignee: "me",
       limit: "100",
       completed_since: "now",
       opt_fields: "gid,name,completed,parent.gid,assignee.gid",
@@ -45,10 +75,22 @@ async function fetchProjectTasksPaginated(projectGid: string, accessToken: strin
   return allTasks;
 }
 
+/**
+ * Sync Asana using **only this user's** OAuth token.
+ * Projects: visible in workspaces the user can access.
+ * Tasks/subtasks: assigned to this user only (`assignee=me`).
+ */
 export async function syncUserAsanaData(userId: string, type: "initial" | "periodic" | "manual" = "manual") {
   const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
   if (!user) {
     throw new Error("User not found");
+  }
+
+  const connection = await db.query.asanaConnections.findFirst({
+    where: eq(asanaConnections.userId, userId),
+  });
+  if (!connection) {
+    throw new Error("Asana not connected for this user");
   }
 
   const run = await db
@@ -57,29 +99,12 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
     .returning();
 
   try {
-    const companyUsers = await db.query.users.findMany({
-      where: eq(users.companyId, user.companyId),
-      columns: { id: true },
-    });
-    const companyUserIds = companyUsers.map((companyUser) => companyUser.id);
-    const companyConnections = companyUserIds.length
-      ? await db.query.asanaConnections.findMany({
-          where: inArray(asanaConnections.userId, companyUserIds),
-        })
-      : [];
-
-    const preferredConnection =
-      companyConnections.find((connection) => connection.userId === userId) ?? companyConnections[0];
-    if (!preferredConnection) {
-      throw new Error("Asana not connected");
-    }
-
-    const accessToken = decrypt(preferredConnection.accessTokenEncrypted);
+    const accessToken = decrypt(connection.accessTokenEncrypted);
     let projectsSynced = 0;
     let tasksSynced = 0;
     let subtasksSynced = 0;
 
-    const workspaces = await asanaFetch<AsanaWorkspacesResponse>("/workspaces?limit=50&opt_fields=gid,name", accessToken);
+    const workspaces = await asanaFetch<AsanaWorkspacesResponse>("/workspaces?limit=100&opt_fields=gid,name", accessToken);
     const primaryWorkspace = workspaces.data[0];
     if (primaryWorkspace) {
       await db
@@ -91,68 +116,89 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
         .where(eq(companies.id, user.companyId));
     }
 
-    const projectsResponse = await asanaFetch<AsanaProjectsResponse>(
-      "/projects?opt_fields=gid,name,archived",
-      accessToken,
-    );
+    for (const workspace of workspaces.data) {
+      const workspaceProjects = await fetchWorkspaceProjectsPaginated(workspace.gid, accessToken);
 
-    for (const project of projectsResponse.data) {
-      if (project.archived) {
-        continue;
-      }
-      projectsSynced += 1;
+      for (const project of workspaceProjects) {
+        projectsSynced += 1;
 
-      const [upsertedProject] = await db
-        .insert(projects)
-        .values({
-          companyId: user.companyId,
-          asanaProjectId: project.gid,
-          name: truncateName(project.name),
-          lastSyncedAt: new Date(),
-        })
-        .onConflictDoUpdate({
-          target: [projects.companyId, projects.asanaProjectId],
-          set: { name: truncateName(project.name), lastSyncedAt: new Date(), isActive: true },
-        })
-        .returning();
-
-      const taskData = await fetchProjectTasksPaginated(project.gid, accessToken);
-
-      for (const task of taskData) {
-        if (task.completed) {
-          continue;
-        }
-
-        const parentTask = task.parent?.gid
-          ? await db.query.tasks.findFirst({
-              where: eq(tasks.asanaTaskId, task.parent.gid),
-            })
-          : null;
-
-        await db
-          .insert(tasks)
+        const [upsertedProject] = await db
+          .insert(projects)
           .values({
-            projectId: upsertedProject.id,
-            asanaTaskId: task.gid,
-            name: truncateName(task.name),
-            assignedUserId: null,
-            parentTaskId: parentTask?.id ?? null,
-            isActive: true,
+            companyId: user.companyId,
+            syncedByUserId: userId,
+            asanaProjectId: project.gid,
+            name: truncateName(project.name),
             lastSyncedAt: new Date(),
           })
           .onConflictDoUpdate({
-            target: tasks.asanaTaskId,
+            target: [projects.syncedByUserId, projects.asanaProjectId],
             set: {
+              name: truncateName(project.name),
+              lastSyncedAt: new Date(),
+              isActive: true,
+            },
+          })
+          .returning();
+
+        const taskData = await fetchProjectTasksAssignedToMePaginated(project.gid, accessToken);
+        const openTasks = taskData.filter((task) => !task.completed);
+
+        const topLevel = openTasks.filter((task) => !task.parent?.gid);
+        const withParent = openTasks.filter((task) => Boolean(task.parent?.gid));
+
+        for (const task of topLevel) {
+          await db
+            .insert(tasks)
+            .values({
+              projectId: upsertedProject.id,
+              asanaTaskId: task.gid,
               name: truncateName(task.name),
-              assignedUserId: null,
+              assignedUserId: userId,
+              parentTaskId: null,
+              isActive: true,
+              lastSyncedAt: new Date(),
+            })
+            .onConflictDoUpdate({
+              target: [tasks.projectId, tasks.asanaTaskId],
+              set: {
+                name: truncateName(task.name),
+                assignedUserId: userId,
+                parentTaskId: null,
+                isActive: true,
+                lastSyncedAt: new Date(),
+              },
+            });
+          tasksSynced += 1;
+        }
+
+        for (const task of withParent) {
+          const parentTask = await db.query.tasks.findFirst({
+            where: and(eq(tasks.projectId, upsertedProject.id), eq(tasks.asanaTaskId, task.parent!.gid)),
+          });
+
+          await db
+            .insert(tasks)
+            .values({
+              projectId: upsertedProject.id,
+              asanaTaskId: task.gid,
+              name: truncateName(task.name),
+              assignedUserId: userId,
               parentTaskId: parentTask?.id ?? null,
               isActive: true,
               lastSyncedAt: new Date(),
-            },
-          });
-
-        tasksSynced += 1;
-        if (task.parent?.gid) {
+            })
+            .onConflictDoUpdate({
+              target: [tasks.projectId, tasks.asanaTaskId],
+              set: {
+                name: truncateName(task.name),
+                assignedUserId: userId,
+                parentTaskId: parentTask?.id ?? null,
+                isActive: true,
+                lastSyncedAt: new Date(),
+              },
+            });
+          tasksSynced += 1;
           subtasksSynced += 1;
         }
       }
@@ -177,7 +223,7 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
         endedAt: new Date(),
         error: error instanceof Error ? error.message : "Unknown sync error",
       })
-      .where(and(eq(syncRuns.id, run[0].id)));
+      .where(eq(syncRuns.id, run[0].id));
     throw error;
   }
 }

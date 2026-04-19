@@ -23,7 +23,7 @@ export default async function TimesheetPage() {
     orderBy: (table, { desc }) => [desc(table.entryDate)],
   });
   const projectOptions = await db.query.projects.findMany({
-    where: eq(projects.companyId, user.companyId),
+    where: and(eq(projects.companyId, user.companyId), eq(projects.syncedByUserId, user.id)),
     columns: { id: true, name: true },
     orderBy: (table, { asc }) => [asc(table.name)],
   });

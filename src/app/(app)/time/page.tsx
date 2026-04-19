@@ -1,6 +1,6 @@
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { projects, tasks } from "@/lib/db/schema";
 import { Card } from "@/components/ui/card";
 import { QuickEntryForm } from "@/components/time/quick-entry-form";
@@ -12,7 +12,7 @@ export default async function TimePage() {
   }
 
   const availableProjects = await db.query.projects.findMany({
-    where: eq(projects.companyId, user.companyId),
+    where: and(eq(projects.companyId, user.companyId), eq(projects.syncedByUserId, user.id)),
     orderBy: (table, { asc }) => [asc(table.name)],
   });
   const projectIds = availableProjects.map((project) => project.id);

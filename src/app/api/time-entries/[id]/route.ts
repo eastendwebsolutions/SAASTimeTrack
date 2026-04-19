@@ -3,8 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
 import { companySettings, timeEntries } from "@/lib/db/schema";
-import { canReviewEntries } from "@/lib/auth/rbac";
+import { canReviewEntries, isSuperAdmin } from "@/lib/auth/rbac";
 import { getDurationMinutes } from "@/lib/validation/time-entry";
+import { assertProjectTaskOwnedByUser } from "@/lib/validation/time-entry-ownership";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getOrCreateCurrentUser();
@@ -21,12 +22,23 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     subtaskId?: string | null;
   };
   const entry = await db.query.timeEntries.findFirst({ where: eq(timeEntries.id, id) });
-  if (!entry || entry.companyId !== user.companyId) {
+  if (!entry) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (entry.companyId !== user.companyId && !isSuperAdmin(user.role)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const isOwner = entry.userId === user.id;
+  const isReviewer = canReviewEntries(user.role) && (entry.companyId === user.companyId || isSuperAdmin(user.role));
+  if (!isOwner && !isReviewer) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   if (entry.lockedAt) {
-    const settings = await db.query.companySettings.findFirst({ where: eq(companySettings.companyId, user.companyId) });
+    const settings = await db.query.companySettings.findFirst({
+      where: eq(companySettings.companyId, entry.companyId),
+    });
     if (!(canReviewEntries(user.role) && settings?.allowAdminOverrideLockedEntries)) {
       return NextResponse.json({ error: "Entry is locked" }, { status: 403 });
     }
@@ -37,6 +49,23 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const durationMinutes =
     body.timeIn || body.timeOut ? getDurationMinutes(nextTimeIn.toISOString(), nextTimeOut.toISOString()) : entry.durationMinutes;
 
+  const nextProjectId = body.projectId ?? entry.projectId;
+  const nextTaskId = body.taskId ?? entry.taskId;
+  const nextSubtaskId = body.subtaskId === undefined ? entry.subtaskId : body.subtaskId || null;
+
+  if (body.projectId || body.taskId || body.subtaskId !== undefined) {
+    try {
+      await assertProjectTaskOwnedByUser({
+        ownerUserId: entry.userId,
+        projectId: nextProjectId,
+        taskId: nextTaskId,
+        subtaskId: nextSubtaskId,
+      });
+    } catch {
+      return NextResponse.json({ error: "Invalid project or task for this entry's owner" }, { status: 403 });
+    }
+  }
+
   const [updated] = await db
     .update(timeEntries)
     .set({
@@ -45,11 +74,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       timeIn: nextTimeIn,
       timeOut: nextTimeOut,
       durationMinutes,
-      projectId: body.projectId ?? entry.projectId,
-      taskId: body.taskId ?? entry.taskId,
-      subtaskId: body.subtaskId === undefined ? entry.subtaskId : body.subtaskId || null,
+      projectId: nextProjectId,
+      taskId: nextTaskId,
+      subtaskId: nextSubtaskId,
     })
-    .where(and(eq(timeEntries.id, id), eq(timeEntries.companyId, user.companyId)))
+    .where(
+      isSuperAdmin(user.role)
+        ? eq(timeEntries.id, id)
+        : and(eq(timeEntries.id, id), eq(timeEntries.companyId, user.companyId)),
+    )
     .returning();
 
   return NextResponse.json(updated);
@@ -61,14 +94,25 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
 
   const { id } = await params;
   const entry = await db.query.timeEntries.findFirst({ where: eq(timeEntries.id, id) });
-  if (!entry || entry.companyId !== user.companyId) {
+  if (!entry) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (entry.companyId !== user.companyId && !isSuperAdmin(user.role)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (entry.userId !== user.id && !isSuperAdmin(user.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   if (entry.lockedAt) {
     return NextResponse.json({ error: "Entry is locked" }, { status: 403 });
   }
 
-  await db.delete(timeEntries).where(and(eq(timeEntries.id, id), eq(timeEntries.companyId, user.companyId)));
+  await db.delete(timeEntries).where(
+    isSuperAdmin(user.role)
+      ? eq(timeEntries.id, id)
+      : and(eq(timeEntries.id, id), eq(timeEntries.companyId, user.companyId)),
+  );
   return NextResponse.json({ ok: true });
 }

@@ -24,7 +24,8 @@ export default async function IntegrationsPage() {
       <Card className="p-5">
         <h2 className="mb-2 font-medium">Asana</h2>
         <p className="mb-4 text-sm text-zinc-400">
-          {connection ? "Connected" : "Not connected"}. Sync refreshes shared projects/tasks for your whole company workspace.
+          {connection ? "Connected" : "Not connected"}. Each user connects their own Asana account—no workspace-wide app install.
+          Sync pulls projects you can access and tasks assigned to you, stored for your account only.
         </p>
         <a href="/api/asana/connect/url">
           <Button>{connection ? "Reconnect Asana" : "Connect Asana"}</Button>

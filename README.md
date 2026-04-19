@@ -6,8 +6,8 @@ Asana-first multi-tenant time tracking MVP built with Next.js, Clerk, Drizzle, a
 
 - Clerk authentication and protected app routes
 - Multi-tenant data model (`company_id` scoping)
-- Asana OAuth connect endpoint and callback token storage
-- Initial and periodic Asana sync service (assigned tasks)
+- Asana OAuth **per user** (no org-wide Asana install); sync uses only that user’s token
+- Projects the user can see in Asana; tasks **assigned to that user** (`assignee=me`) plus subtasks under those tasks
 - Quick time entry page and API
 - Weekly timesheet view and submit lock workflow
 - Per-entry admin approval/rejection and comments endpoint
@@ -34,6 +34,8 @@ cp .env.example .env.local
 npm run db:generate
 npm run db:push
 ```
+
+Upgrading an existing database from company-wide project rows: if `db:push` does not apply cleanly, run the SQL in `drizzle/0003_per_user_asana.sql` (or let `db:push` reconcile from `src/lib/db/schema.ts`).
 
 4. Start development server:
 

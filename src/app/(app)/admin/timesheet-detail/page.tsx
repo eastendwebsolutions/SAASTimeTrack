@@ -42,7 +42,7 @@ export default async function AdminTimesheetDetailPage({ searchParams }: { searc
   });
 
   const companyProjects = await db.query.projects.findMany({
-    where: eq(projects.companyId, targetUser.companyId),
+    where: and(eq(projects.companyId, targetUser.companyId), eq(projects.syncedByUserId, targetUserId)),
     orderBy: (table, { asc }) => [asc(table.name)],
   });
   const projectIds = companyProjects.map((project) => project.id);
