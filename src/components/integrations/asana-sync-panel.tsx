@@ -42,7 +42,17 @@ export function AsanaSyncPanel({ connected, initialRun, triggerInitialSync = fal
       const response = await fetch("/api/asana/sync/initial", { method: "POST" });
       const data = (await response.json()) as {
         ok?: boolean;
-        summary?: { projectsSynced: number; tasksSynced: number; subtasksSynced: number };
+        summary?: {
+          projectsSynced: number;
+          tasksSynced: number;
+          subtasksSynced: number;
+          diagnostics?: {
+            workspaceAssignedFetched: number;
+            globalAssignedFetched: number;
+            assignedSubtasksCandidate: number;
+            assignedSubtasksResolvedToProject: number;
+          };
+        };
         error?: string;
         details?: string;
       };
@@ -50,7 +60,10 @@ export function AsanaSyncPanel({ connected, initialRun, triggerInitialSync = fal
         setMessage(data.details || data.error || "Sync failed.");
       } else {
         setMessage(
-          `Sync complete. Projects: ${data.summary?.projectsSynced ?? 0}, Tasks: ${data.summary?.tasksSynced ?? 0}, Subtasks: ${data.summary?.subtasksSynced ?? 0}`,
+          `Sync complete. Projects: ${data.summary?.projectsSynced ?? 0}, Tasks: ${data.summary?.tasksSynced ?? 0}, Subtasks: ${data.summary?.subtasksSynced ?? 0}` +
+            (data.summary?.diagnostics
+              ? ` | Debug: assigned(workspace/global) ${data.summary.diagnostics.workspaceAssignedFetched}/${data.summary.diagnostics.globalAssignedFetched}, candidates ${data.summary.diagnostics.assignedSubtasksCandidate}, resolved ${data.summary.diagnostics.assignedSubtasksResolvedToProject}`
+              : ""),
         );
       }
       await refreshStatus();
@@ -69,7 +82,17 @@ export function AsanaSyncPanel({ connected, initialRun, triggerInitialSync = fal
         const response = await fetch("/api/asana/sync/initial", { method: "POST" });
         const data = (await response.json()) as {
           ok?: boolean;
-          summary?: { projectsSynced: number; tasksSynced: number; subtasksSynced: number };
+          summary?: {
+            projectsSynced: number;
+            tasksSynced: number;
+            subtasksSynced: number;
+            diagnostics?: {
+              workspaceAssignedFetched: number;
+              globalAssignedFetched: number;
+              assignedSubtasksCandidate: number;
+              assignedSubtasksResolvedToProject: number;
+            };
+          };
           error?: string;
           details?: string;
         };
@@ -77,7 +100,10 @@ export function AsanaSyncPanel({ connected, initialRun, triggerInitialSync = fal
           setMessage(data.details || data.error || "First sync failed. Use “Sync Asana Now” to retry.");
         } else {
           setMessage(
-            `Sync complete. Projects: ${data.summary?.projectsSynced ?? 0}, Tasks: ${data.summary?.tasksSynced ?? 0}, Subtasks: ${data.summary?.subtasksSynced ?? 0}`,
+            `Sync complete. Projects: ${data.summary?.projectsSynced ?? 0}, Tasks: ${data.summary?.tasksSynced ?? 0}, Subtasks: ${data.summary?.subtasksSynced ?? 0}` +
+              (data.summary?.diagnostics
+                ? ` | Debug: assigned(workspace/global) ${data.summary.diagnostics.workspaceAssignedFetched}/${data.summary.diagnostics.globalAssignedFetched}, candidates ${data.summary.diagnostics.assignedSubtasksCandidate}, resolved ${data.summary.diagnostics.assignedSubtasksResolvedToProject}`
+                : ""),
           );
         }
         await refreshStatus();

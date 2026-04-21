@@ -32,6 +32,13 @@ type AsanaSubtasksResponse = {
   next_page?: { offset?: string | null } | null;
 };
 
+type SyncDiagnostics = {
+  workspaceAssignedFetched: number;
+  globalAssignedFetched: number;
+  assignedSubtasksCandidate: number;
+  assignedSubtasksResolvedToProject: number;
+};
+
 function truncateName(name: string, maxLength = 255) {
   return name.length <= maxLength ? name : name.slice(0, maxLength);
 }
@@ -78,7 +85,6 @@ async function fetchProjectTasksPaginatedWithAuth(
 
   do {
     const params = new URLSearchParams({
-      project: projectGid,
       limit: "100",
       completed_since: "now",
       opt_fields: "gid,name,completed,parent.gid,assignee.gid",
@@ -88,7 +94,7 @@ async function fetchProjectTasksPaginatedWithAuth(
       params.set("offset", offset);
     }
 
-    const page = await authFetch<AsanaTasksResponse>(`/tasks?${params.toString()}`);
+    const page = await authFetch<AsanaTasksResponse>(`/projects/${projectGid}/tasks?${params.toString()}`);
     allTasks.push(...page.data);
     offset = page.next_page?.offset ?? null;
   } while (offset);
@@ -130,6 +136,29 @@ async function fetchWorkspaceAssignedTasksPaginatedWithAuth(
   do {
     const params = new URLSearchParams({
       workspace: workspaceGid,
+      assignee: "me",
+      limit: "100",
+      completed_since: "now",
+      opt_fields: "gid,name,completed,parent.gid,assignee.gid,memberships.project.gid",
+    });
+    if (offset) {
+      params.set("offset", offset);
+    }
+
+    const page = await authFetch<AsanaTasksResponse>(`/tasks?${params.toString()}`);
+    allTasks.push(...page.data);
+    offset = page.next_page?.offset ?? null;
+  } while (offset);
+
+  return allTasks;
+}
+
+async function fetchAssignedTasksPaginatedWithAuth(authFetch: <T>(path: string) => Promise<T>) {
+  const allTasks: AsanaTasksResponse["data"] = [];
+  let offset: string | null = null;
+
+  do {
+    const params = new URLSearchParams({
       assignee: "me",
       limit: "100",
       completed_since: "now",
@@ -240,10 +269,9 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
       }
     }
 
-    let meAsanaGid = connection.asanaUserId;
-    if (!meAsanaGid || meAsanaGid === "unknown") {
-      const me = await asanaFetchWithRefresh<{ data: { gid: string } }>("/users/me?opt_fields=gid");
-      meAsanaGid = me.data.gid;
+    const me = await asanaFetchWithRefresh<{ data: { gid: string } }>("/users/me?opt_fields=gid");
+    const meAsanaGid = me.data.gid;
+    if (connection.asanaUserId !== meAsanaGid) {
       await db
         .update(asanaConnections)
         .set({ asanaUserId: meAsanaGid })
@@ -253,6 +281,12 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
     let projectsSynced = 0;
     let tasksSynced = 0;
     let subtasksSynced = 0;
+    const diagnostics: SyncDiagnostics = {
+      workspaceAssignedFetched: 0,
+      globalAssignedFetched: 0,
+      assignedSubtasksCandidate: 0,
+      assignedSubtasksResolvedToProject: 0,
+    };
 
     const workspaces = await asanaFetchWithRefresh<AsanaWorkspacesResponse>(
       "/workspaces?limit=100&opt_fields=gid,name",
@@ -279,6 +313,9 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
     }
     await db.update(projects).set({ isActive: false }).where(eq(projects.syncedByUserId, userId));
 
+    const globalAssignedTasks = await fetchAssignedTasksPaginatedWithAuth(asanaFetchWithRefresh);
+    diagnostics.globalAssignedFetched = globalAssignedTasks.length;
+
     for (const workspace of workspaces.data) {
       const workspaceProjects = await fetchWorkspaceProjectsPaginatedWithAuth(
         workspace.gid,
@@ -288,6 +325,8 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
         workspace.gid,
         asanaFetchWithRefresh,
       );
+      diagnostics.workspaceAssignedFetched += workspaceAssignedTasks.length;
+      const combinedAssignedTasks = [...workspaceAssignedTasks, ...globalAssignedTasks];
 
       const parentProjectCache = new Map<string, string | null>();
       const projectByGid = new Map<string, { gid: string; name: string; archived?: boolean }>();
@@ -297,8 +336,11 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
       const workspaceAssignedTopLevelByProject = new Map<string, AsanaTasksResponse["data"]>();
       const workspaceAssignedSubtasksByProject = new Map<string, AsanaTasksResponse["data"]>();
 
-      for (const task of workspaceAssignedTasks) {
+      for (const task of combinedAssignedTasks) {
         if (task.completed) continue;
+        if (task.parent?.gid) {
+          diagnostics.assignedSubtasksCandidate += 1;
+        }
         let projectGid = task.memberships?.[0]?.project?.gid ?? null;
         if (!projectGid) {
           if (task.parent?.gid) {
@@ -329,6 +371,9 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
           }
         }
         if (!projectByGid.has(projectGid)) continue;
+        if (task.parent?.gid) {
+          diagnostics.assignedSubtasksResolvedToProject += 1;
+        }
 
         if (task.parent?.gid) {
           const current = workspaceAssignedSubtasksByProject.get(projectGid) ?? [];
@@ -370,10 +415,20 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
           (task) => Boolean(task.parent?.gid) && task.assignee?.gid === meAsanaGid,
         );
 
+        const fetchedAssignedSubtasks: AsanaTasksResponse["data"] = [];
+        for (const parentTask of topLevelTasks) {
+          const subtasks = await fetchTaskSubtasksPaginatedWithAuth(parentTask.gid, asanaFetchWithRefresh);
+          for (const subtask of subtasks) {
+            if (!subtask.completed && subtask.assignee?.gid === meAsanaGid) {
+              fetchedAssignedSubtasks.push(subtask);
+            }
+          }
+        }
+
         const workspaceAssignedSubtasks = workspaceAssignedSubtasksByProject.get(project.gid) ?? [];
         const workspaceAssignedTopLevel = workspaceAssignedTopLevelByProject.get(project.gid) ?? [];
         const assignedSubtasksByGid = new Map<string, AsanaTasksResponse["data"][number]>();
-        for (const task of [...inlineAssignedSubtasks, ...workspaceAssignedSubtasks]) {
+        for (const task of [...inlineAssignedSubtasks, ...fetchedAssignedSubtasks, ...workspaceAssignedSubtasks]) {
           assignedSubtasksByGid.set(task.gid, task);
         }
         const assignedSubtasks = [...assignedSubtasksByGid.values()].filter((task) => Boolean(task.parent?.gid));
@@ -484,7 +539,7 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
         subtasksSynced,
       })
       .where(eq(syncRuns.id, run[0].id));
-    return { projectsSynced, tasksSynced, subtasksSynced };
+    return { projectsSynced, tasksSynced, subtasksSynced, diagnostics };
   } catch (error) {
     await db
       .update(syncRuns)

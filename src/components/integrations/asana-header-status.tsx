@@ -23,13 +23,28 @@ export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, timezone }: P
       const response = await fetch("/api/asana/sync/initial", { method: "POST" });
       const data = (await response.json().catch(() => ({}))) as {
         ok?: boolean;
-        summary?: { projectsSynced: number; tasksSynced: number; subtasksSynced: number };
+        summary?: {
+          projectsSynced: number;
+          tasksSynced: number;
+          subtasksSynced: number;
+          diagnostics?: {
+            workspaceAssignedFetched: number;
+            globalAssignedFetched: number;
+            assignedSubtasksCandidate: number;
+            assignedSubtasksResolvedToProject: number;
+          };
+        };
         error?: string;
         details?: string;
       };
       if (!response.ok || !data.ok) {
         setMessage(data.details || data.error || "Sync failed.");
         return;
+      }
+      if (data.summary?.diagnostics) {
+        setMessage(
+          `Debug: assigned(workspace/global) ${data.summary.diagnostics.workspaceAssignedFetched}/${data.summary.diagnostics.globalAssignedFetched}, candidates ${data.summary.diagnostics.assignedSubtasksCandidate}, resolved ${data.summary.diagnostics.assignedSubtasksResolvedToProject}`,
+        );
       }
       router.refresh();
     } finally {
