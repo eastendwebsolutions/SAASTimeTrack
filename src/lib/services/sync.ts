@@ -20,6 +20,17 @@ type AsanaTasksResponse = {
   next_page?: { offset?: string | null } | null;
 };
 
+type AsanaSubtasksResponse = {
+  data: Array<{
+    gid: string;
+    name: string;
+    completed?: boolean;
+    parent?: { gid: string } | null;
+    assignee?: { gid: string } | null;
+  }>;
+  next_page?: { offset?: string | null } | null;
+};
+
 function truncateName(name: string, maxLength = 255) {
   return name.length <= maxLength ? name : name.slice(0, maxLength);
 }
@@ -82,6 +93,30 @@ async function fetchProjectTasksPaginatedWithAuth(
   } while (offset);
 
   return allTasks;
+}
+
+async function fetchTaskSubtasksPaginatedWithAuth(
+  taskGid: string,
+  authFetch: <T>(path: string) => Promise<T>,
+) {
+  const allSubtasks: AsanaSubtasksResponse["data"] = [];
+  let offset: string | null = null;
+
+  do {
+    const params = new URLSearchParams({
+      limit: "100",
+      opt_fields: "gid,name,completed,parent.gid,assignee.gid",
+    });
+    if (offset) {
+      params.set("offset", offset);
+    }
+
+    const page = await authFetch<AsanaSubtasksResponse>(`/tasks/${taskGid}/subtasks?${params.toString()}`);
+    allSubtasks.push(...page.data);
+    offset = page.next_page?.offset ?? null;
+  } while (offset);
+
+  return allSubtasks;
 }
 
 /**
@@ -221,9 +256,26 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
 
         const taskData = await fetchProjectTasksPaginatedWithAuth(project.gid, asanaFetchWithRefresh);
         const activeTasks = taskData.filter((task) => !task.completed);
-        const assignedTasks = activeTasks.filter((task) => task.assignee?.gid === meAsanaGid);
-        const assignedTopLevel = assignedTasks.filter((task) => !task.parent?.gid);
-        const assignedSubtasks = assignedTasks.filter((task) => Boolean(task.parent?.gid));
+        const topLevelTasks = activeTasks.filter((task) => !task.parent?.gid);
+        const assignedTopLevel = topLevelTasks.filter((task) => task.assignee?.gid === meAsanaGid);
+        const inlineAssignedSubtasks = activeTasks.filter(
+          (task) => Boolean(task.parent?.gid) && task.assignee?.gid === meAsanaGid,
+        );
+
+        const fetchedAssignedSubtasks: AsanaTasksResponse["data"] = [];
+        for (const parentTask of topLevelTasks) {
+          const subtasks = await fetchTaskSubtasksPaginatedWithAuth(parentTask.gid, asanaFetchWithRefresh);
+          for (const subtask of subtasks) {
+            if (!subtask.completed && subtask.assignee?.gid === meAsanaGid) {
+              fetchedAssignedSubtasks.push(subtask);
+            }
+          }
+        }
+        const assignedSubtasksByGid = new Map<string, AsanaTasksResponse["data"][number]>();
+        for (const task of [...inlineAssignedSubtasks, ...fetchedAssignedSubtasks]) {
+          assignedSubtasksByGid.set(task.gid, task);
+        }
+        const assignedSubtasks = [...assignedSubtasksByGid.values()].filter((task) => Boolean(task.parent?.gid));
 
         // Include unassigned parent tasks when they contain assigned subtasks, so UI can select those subtasks.
         const requiredParentIds = new Set(assignedSubtasks.map((task) => task.parent!.gid));
