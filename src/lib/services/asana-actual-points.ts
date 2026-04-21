@@ -62,9 +62,10 @@ async function updateAsanaActualPoints(target: EntryTarget) {
     columns: { syncedByUserId: true },
   });
   if (!projectRow) return;
+  const syncedByUserId = projectRow.syncedByUserId;
 
   const connection = await db.query.asanaConnections.findFirst({
-    where: eq(asanaConnections.userId, projectRow.syncedByUserId),
+    where: eq(asanaConnections.userId, syncedByUserId),
   });
   if (!connection) return;
 
@@ -87,7 +88,7 @@ async function updateAsanaActualPoints(target: EntryTarget) {
         refreshTokenEncrypted: encrypt(refreshToken),
         expiresAt: refreshed.expires_in ? new Date(Date.now() + refreshed.expires_in * 1000) : null,
       })
-      .where(eq(asanaConnections.userId, projectRow.syncedByUserId));
+      .where(eq(asanaConnections.userId, syncedByUserId));
   }
 
   async function asanaRequestWithRefresh<T>(
