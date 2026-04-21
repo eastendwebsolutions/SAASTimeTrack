@@ -169,24 +169,24 @@ export function QuickEntryForm({ projects, tasks }: Props) {
     return projects.find((project) => project.name.trim().toLowerCase() === normalized) ?? null;
   }, [projectSearch, projects]);
 
-  const topLevelTasks = useMemo(
-    () => tasks.filter((task) => task.projectId === (selectedProject?.id ?? "") && !task.parentTaskId),
+  const projectTasks = useMemo(
+    () => tasks.filter((task) => task.projectId === (selectedProject?.id ?? "")),
     [tasks, selectedProject],
   );
   const filteredTopLevelTasks = useMemo(() => {
     const query = taskSearch.trim().toLowerCase();
-    if (!query) return topLevelTasks;
-    return topLevelTasks.filter((task) => task.name.toLowerCase().includes(query));
-  }, [taskSearch, topLevelTasks]);
+    if (!query) return projectTasks;
+    return projectTasks.filter((task) => task.name.toLowerCase().includes(query));
+  }, [taskSearch, projectTasks]);
 
   const selectedTask = useMemo(() => {
     const normalized = taskSearch.trim().toLowerCase();
     if (!normalized) return null;
-    return topLevelTasks.find((task) => task.name.trim().toLowerCase() === normalized) ?? null;
-  }, [taskSearch, topLevelTasks]);
+    return projectTasks.find((task) => task.name.trim().toLowerCase() === normalized) ?? null;
+  }, [taskSearch, projectTasks]);
 
   const subtaskOptions = useMemo(
-    () => tasks.filter((task) => task.parentTaskId === (selectedTask?.id ?? "")),
+    () => (selectedTask?.parentTaskId ? [] : tasks.filter((task) => task.parentTaskId === (selectedTask?.id ?? ""))),
     [tasks, selectedTask],
   );
   const filteredSubtasks = useMemo(() => {
@@ -237,6 +237,9 @@ export function QuickEntryForm({ projects, tasks }: Props) {
       return;
     }
 
+    const effectiveTaskId = selectedTask.parentTaskId ?? selectedTask.id;
+    const effectiveSubtaskId = selectedTask.parentTaskId ? selectedTask.id : selectedSubtask?.id ?? null;
+
     const segmentSources: Segment[] =
       segments.length > 0
         ? segments
@@ -265,8 +268,8 @@ export function QuickEntryForm({ projects, tasks }: Props) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               projectId: selectedProject.id,
-              taskId: selectedTask.id,
-              subtaskId: selectedSubtask?.id ?? null,
+              taskId: effectiveTaskId,
+              subtaskId: effectiveSubtaskId,
               entryDate: chunk.entryDate,
               timeIn: chunk.start.toISOString(),
               timeOut: chunk.end.toISOString(),
@@ -353,7 +356,7 @@ export function QuickEntryForm({ projects, tasks }: Props) {
           className="rounded-md border border-zinc-700 bg-zinc-950 p-2"
           value={subtaskSearch}
           onChange={(event) => setSubtaskSearch(event.target.value)}
-          disabled={!selectedTask || startedAt !== null}
+          disabled={!selectedTask || Boolean(selectedTask.parentTaskId) || startedAt !== null}
           list="subtask-options"
         />
         <datalist id="subtask-options">
@@ -361,6 +364,9 @@ export function QuickEntryForm({ projects, tasks }: Props) {
             <option key={task.id} value={task.name} />
           ))}
         </datalist>
+        {selectedTask?.parentTaskId ? (
+          <span className="text-xs text-zinc-500">Selected task is already a subtask and will be logged directly.</span>
+        ) : null}
       </label>
 
       <div className="flex flex-col gap-2 text-sm md:col-span-2">
