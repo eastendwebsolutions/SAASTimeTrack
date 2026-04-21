@@ -42,6 +42,7 @@ export function AsanaSyncPanel({ connected, initialRun, triggerInitialSync = fal
       const response = await fetch("/api/asana/sync/initial", { method: "POST" });
       const data = (await response.json()) as {
         ok?: boolean;
+        debugBuild?: string;
         summary?: {
           projectsSynced: number;
           tasksSynced: number;
@@ -61,6 +62,7 @@ export function AsanaSyncPanel({ connected, initialRun, triggerInitialSync = fal
       } else {
         setMessage(
           `Sync complete. Projects: ${data.summary?.projectsSynced ?? 0}, Tasks: ${data.summary?.tasksSynced ?? 0}, Subtasks: ${data.summary?.subtasksSynced ?? 0}` +
+            (data.debugBuild ? ` | Build: ${data.debugBuild}` : "") +
             (data.summary?.diagnostics
               ? ` | Debug: assigned(workspace/global) ${data.summary.diagnostics.workspaceAssignedFetched}/${data.summary.diagnostics.globalAssignedFetched}, candidates ${data.summary.diagnostics.assignedSubtasksCandidate}, resolved ${data.summary.diagnostics.assignedSubtasksResolvedToProject}`
               : ""),
@@ -82,6 +84,7 @@ export function AsanaSyncPanel({ connected, initialRun, triggerInitialSync = fal
         const response = await fetch("/api/asana/sync/initial", { method: "POST" });
         const data = (await response.json()) as {
           ok?: boolean;
+          debugBuild?: string;
           summary?: {
             projectsSynced: number;
             tasksSynced: number;
@@ -101,6 +104,7 @@ export function AsanaSyncPanel({ connected, initialRun, triggerInitialSync = fal
         } else {
           setMessage(
             `Sync complete. Projects: ${data.summary?.projectsSynced ?? 0}, Tasks: ${data.summary?.tasksSynced ?? 0}, Subtasks: ${data.summary?.subtasksSynced ?? 0}` +
+              (data.debugBuild ? ` | Build: ${data.debugBuild}` : "") +
               (data.summary?.diagnostics
                 ? ` | Debug: assigned(workspace/global) ${data.summary.diagnostics.workspaceAssignedFetched}/${data.summary.diagnostics.globalAssignedFetched}, candidates ${data.summary.diagnostics.assignedSubtasksCandidate}, resolved ${data.summary.diagnostics.assignedSubtasksResolvedToProject}`
                 : ""),

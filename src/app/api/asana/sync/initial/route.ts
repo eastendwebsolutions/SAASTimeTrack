@@ -12,7 +12,11 @@ export async function POST() {
 
   try {
     const summary = await syncUserAsanaData(user.id, "initial");
-    return NextResponse.json({ ok: true, summary });
+    return NextResponse.json({
+      ok: true,
+      summary,
+      debugBuild: "asana-sync-diagnostics-v2",
+    });
   } catch (error) {
     return NextResponse.json(
       {
