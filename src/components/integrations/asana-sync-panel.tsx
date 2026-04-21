@@ -49,7 +49,6 @@ export function AsanaSyncPanel({ connected, initialRun, triggerInitialSync = fal
           subtasksSynced: number;
           diagnostics?: {
             workspaceAssignedFetched: number;
-            globalAssignedFetched: number;
             assignedSubtasksCandidate: number;
             assignedSubtasksResolvedToProject: number;
           };
@@ -64,7 +63,7 @@ export function AsanaSyncPanel({ connected, initialRun, triggerInitialSync = fal
           `Sync complete. Projects: ${data.summary?.projectsSynced ?? 0}, Tasks: ${data.summary?.tasksSynced ?? 0}, Subtasks: ${data.summary?.subtasksSynced ?? 0}` +
             (data.debugBuild ? ` | Build: ${data.debugBuild}` : "") +
             (data.summary?.diagnostics
-              ? ` | Debug: assigned(workspace/global) ${data.summary.diagnostics.workspaceAssignedFetched}/${data.summary.diagnostics.globalAssignedFetched}, candidates ${data.summary.diagnostics.assignedSubtasksCandidate}, resolved ${data.summary.diagnostics.assignedSubtasksResolvedToProject}`
+              ? ` | Debug: assigned(workspace) ${data.summary.diagnostics.workspaceAssignedFetched}, candidates ${data.summary.diagnostics.assignedSubtasksCandidate}, resolved ${data.summary.diagnostics.assignedSubtasksResolvedToProject}`
               : ""),
         );
       }
@@ -91,7 +90,6 @@ export function AsanaSyncPanel({ connected, initialRun, triggerInitialSync = fal
             subtasksSynced: number;
             diagnostics?: {
               workspaceAssignedFetched: number;
-              globalAssignedFetched: number;
               assignedSubtasksCandidate: number;
               assignedSubtasksResolvedToProject: number;
             };
@@ -106,7 +104,7 @@ export function AsanaSyncPanel({ connected, initialRun, triggerInitialSync = fal
             `Sync complete. Projects: ${data.summary?.projectsSynced ?? 0}, Tasks: ${data.summary?.tasksSynced ?? 0}, Subtasks: ${data.summary?.subtasksSynced ?? 0}` +
               (data.debugBuild ? ` | Build: ${data.debugBuild}` : "") +
               (data.summary?.diagnostics
-                ? ` | Debug: assigned(workspace/global) ${data.summary.diagnostics.workspaceAssignedFetched}/${data.summary.diagnostics.globalAssignedFetched}, candidates ${data.summary.diagnostics.assignedSubtasksCandidate}, resolved ${data.summary.diagnostics.assignedSubtasksResolvedToProject}`
+                ? ` | Debug: assigned(workspace) ${data.summary.diagnostics.workspaceAssignedFetched}, candidates ${data.summary.diagnostics.assignedSubtasksCandidate}, resolved ${data.summary.diagnostics.assignedSubtasksResolvedToProject}`
                 : ""),
           );
         }

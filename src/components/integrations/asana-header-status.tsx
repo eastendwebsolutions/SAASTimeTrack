@@ -30,7 +30,6 @@ export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, timezone }: P
           subtasksSynced: number;
           diagnostics?: {
             workspaceAssignedFetched: number;
-            globalAssignedFetched: number;
             assignedSubtasksCandidate: number;
             assignedSubtasksResolvedToProject: number;
           };
@@ -44,7 +43,7 @@ export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, timezone }: P
       }
       if (data.summary?.diagnostics || data.debugBuild) {
         setMessage(
-          `${data.debugBuild ? `Build: ${data.debugBuild}` : ""}${data.debugBuild && data.summary?.diagnostics ? " | " : ""}${data.summary?.diagnostics ? `Debug: assigned(workspace/global) ${data.summary.diagnostics.workspaceAssignedFetched}/${data.summary.diagnostics.globalAssignedFetched}, candidates ${data.summary.diagnostics.assignedSubtasksCandidate}, resolved ${data.summary.diagnostics.assignedSubtasksResolvedToProject}` : ""}`,
+          `${data.debugBuild ? `Build: ${data.debugBuild}` : ""}${data.debugBuild && data.summary?.diagnostics ? " | " : ""}${data.summary?.diagnostics ? `Debug: assigned(workspace) ${data.summary.diagnostics.workspaceAssignedFetched}, candidates ${data.summary.diagnostics.assignedSubtasksCandidate}, resolved ${data.summary.diagnostics.assignedSubtasksResolvedToProject}` : ""}`,
         );
       }
       router.refresh();

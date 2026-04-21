@@ -34,7 +34,6 @@ type AsanaSubtasksResponse = {
 
 type SyncDiagnostics = {
   workspaceAssignedFetched: number;
-  globalAssignedFetched: number;
   assignedSubtasksCandidate: number;
   assignedSubtasksResolvedToProject: number;
 };
@@ -136,29 +135,6 @@ async function fetchWorkspaceAssignedTasksPaginatedWithAuth(
   do {
     const params = new URLSearchParams({
       workspace: workspaceGid,
-      assignee: "me",
-      limit: "100",
-      completed_since: "now",
-      opt_fields: "gid,name,completed,parent.gid,assignee.gid,memberships.project.gid",
-    });
-    if (offset) {
-      params.set("offset", offset);
-    }
-
-    const page = await authFetch<AsanaTasksResponse>(`/tasks?${params.toString()}`);
-    allTasks.push(...page.data);
-    offset = page.next_page?.offset ?? null;
-  } while (offset);
-
-  return allTasks;
-}
-
-async function fetchAssignedTasksPaginatedWithAuth(authFetch: <T>(path: string) => Promise<T>) {
-  const allTasks: AsanaTasksResponse["data"] = [];
-  let offset: string | null = null;
-
-  do {
-    const params = new URLSearchParams({
       assignee: "me",
       limit: "100",
       completed_since: "now",
@@ -283,7 +259,6 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
     let subtasksSynced = 0;
     const diagnostics: SyncDiagnostics = {
       workspaceAssignedFetched: 0,
-      globalAssignedFetched: 0,
       assignedSubtasksCandidate: 0,
       assignedSubtasksResolvedToProject: 0,
     };
@@ -313,9 +288,6 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
     }
     await db.update(projects).set({ isActive: false }).where(eq(projects.syncedByUserId, userId));
 
-    const globalAssignedTasks = await fetchAssignedTasksPaginatedWithAuth(asanaFetchWithRefresh);
-    diagnostics.globalAssignedFetched = globalAssignedTasks.length;
-
     for (const workspace of workspaces.data) {
       const workspaceProjects = await fetchWorkspaceProjectsPaginatedWithAuth(
         workspace.gid,
@@ -326,7 +298,7 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
         asanaFetchWithRefresh,
       );
       diagnostics.workspaceAssignedFetched += workspaceAssignedTasks.length;
-      const combinedAssignedTasks = [...workspaceAssignedTasks, ...globalAssignedTasks];
+      const combinedAssignedTasks = workspaceAssignedTasks;
 
       const parentProjectCache = new Map<string, string | null>();
       const projectByGid = new Map<string, { gid: string; name: string; archived?: boolean }>();
