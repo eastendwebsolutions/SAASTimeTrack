@@ -9,7 +9,11 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const data = await db.query.projects.findMany({
-    where: and(eq(projects.companyId, user.companyId), eq(projects.syncedByUserId, user.id)),
+    where: and(
+      eq(projects.companyId, user.companyId),
+      eq(projects.syncedByUserId, user.id),
+      eq(projects.isActive, true),
+    ),
     orderBy: (table, { asc }) => [asc(table.name)],
   });
   return NextResponse.json(data);

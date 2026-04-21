@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 type SyncRun = {
@@ -16,9 +17,13 @@ type SyncRun = {
 type Props = {
   connected: boolean;
   initialRun: SyncRun | null;
+  /** After OAuth callback; runs first sync in a separate request (avoids callback timeouts). */
+  triggerInitialSync?: boolean;
 };
 
-export function AsanaSyncPanel({ connected, initialRun }: Props) {
+export function AsanaSyncPanel({ connected, initialRun, triggerInitialSync = false }: Props) {
+  const router = useRouter();
+  const postConnectStarted = useRef(false);
   const [run, setRun] = useState<SyncRun | null>(initialRun);
   const [isSyncing, setIsSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -53,6 +58,36 @@ export function AsanaSyncPanel({ connected, initialRun }: Props) {
       setIsSyncing(false);
     }
   }
+
+  useEffect(() => {
+    if (!triggerInitialSync || !connected || postConnectStarted.current) return;
+    postConnectStarted.current = true;
+    void (async () => {
+      setIsSyncing(true);
+      setMessage("Finishing Asana setup (first sync)…");
+      try {
+        const response = await fetch("/api/asana/sync/initial", { method: "POST" });
+        const data = (await response.json()) as {
+          ok?: boolean;
+          summary?: { projectsSynced: number; tasksSynced: number; subtasksSynced: number };
+          error?: string;
+          details?: string;
+        };
+        if (!response.ok || !data.ok) {
+          setMessage(data.details || data.error || "First sync failed. Use “Sync Asana Now” to retry.");
+        } else {
+          setMessage(
+            `Sync complete. Projects: ${data.summary?.projectsSynced ?? 0}, Tasks: ${data.summary?.tasksSynced ?? 0}, Subtasks: ${data.summary?.subtasksSynced ?? 0}`,
+          );
+        }
+        await refreshStatus();
+      } finally {
+        setIsSyncing(false);
+        router.replace("/settings/integrations");
+        router.refresh();
+      }
+    })();
+  }, [triggerInitialSync, connected, router]);
 
   return (
     <div className="mt-4 space-y-3 border-t border-zinc-800 pt-4">

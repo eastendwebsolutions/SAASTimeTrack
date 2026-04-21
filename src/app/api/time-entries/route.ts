@@ -3,9 +3,32 @@ import { NextRequest, NextResponse } from "next/server";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
 import { timeEntries } from "@/lib/db/schema";
+import { syncActualPointsForEntryTarget } from "@/lib/services/asana-actual-points";
 import { getWeekBounds } from "@/lib/services/week";
 import { getDurationMinutes, timeEntryPayloadSchema } from "@/lib/validation/time-entry";
 import { assertProjectTaskOwnedByUser } from "@/lib/validation/time-entry-ownership";
+
+function parseEntryDateLocal(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const localDate = new Date(year, monthIndex, day, 0, 0, 0, 0);
+
+  if (
+    localDate.getFullYear() !== year ||
+    localDate.getMonth() !== monthIndex ||
+    localDate.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return localDate;
+}
 
 export async function GET(request: NextRequest) {
   const user = await getOrCreateCurrentUser();
@@ -49,6 +72,10 @@ export async function POST(request: NextRequest) {
 
   const payload = timeEntryPayloadSchema.parse(parsedPayload);
   const durationMinutes = getDurationMinutes(payload.timeIn, payload.timeOut);
+  const entryDate = parseEntryDateLocal(payload.entryDate);
+  if (!entryDate) {
+    return NextResponse.json({ error: "Invalid entry date" }, { status: 400 });
+  }
 
   try {
     await assertProjectTaskOwnedByUser({
@@ -69,7 +96,7 @@ export async function POST(request: NextRequest) {
       projectId: payload.projectId,
       taskId: payload.taskId,
       subtaskId: payload.subtaskId || null,
-      entryDate: new Date(payload.entryDate),
+      entryDate,
       timeIn: new Date(payload.timeIn),
       timeOut: new Date(payload.timeOut),
       durationMinutes,
@@ -77,6 +104,13 @@ export async function POST(request: NextRequest) {
       status: "draft",
     })
     .returning();
+
+  await syncActualPointsForEntryTarget({
+    companyId: user.companyId,
+    projectId: payload.projectId,
+    taskId: payload.taskId,
+    subtaskId: payload.subtaskId || null,
+  });
 
   if (contentType.includes("application/json")) {
     return NextResponse.json(entry, { status: 201 });

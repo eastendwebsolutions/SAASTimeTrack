@@ -4,6 +4,7 @@ import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
 import { companySettings, timeEntries } from "@/lib/db/schema";
 import { canReviewEntries, isSuperAdmin } from "@/lib/auth/rbac";
+import { syncActualPointsForEntryTarget } from "@/lib/services/asana-actual-points";
 import { getDurationMinutes } from "@/lib/validation/time-entry";
 import { assertProjectTaskOwnedByUser } from "@/lib/validation/time-entry-ownership";
 
@@ -52,6 +53,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const nextProjectId = body.projectId ?? entry.projectId;
   const nextTaskId = body.taskId ?? entry.taskId;
   const nextSubtaskId = body.subtaskId === undefined ? entry.subtaskId : body.subtaskId || null;
+  const previousTarget = {
+    companyId: entry.companyId,
+    projectId: entry.projectId,
+    taskId: entry.taskId,
+    subtaskId: entry.subtaskId,
+  };
 
   if (body.projectId || body.taskId || body.subtaskId !== undefined) {
     try {
@@ -85,6 +92,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     )
     .returning();
 
+  const nextTarget = {
+    companyId: updated.companyId,
+    projectId: nextProjectId,
+    taskId: nextTaskId,
+    subtaskId: nextSubtaskId,
+  };
+  await syncActualPointsForEntryTarget(nextTarget);
+  if (
+    previousTarget.projectId !== nextTarget.projectId ||
+    previousTarget.taskId !== nextTarget.taskId ||
+    previousTarget.subtaskId !== nextTarget.subtaskId
+  ) {
+    await syncActualPointsForEntryTarget(previousTarget);
+  }
+
   return NextResponse.json(updated);
 }
 
@@ -114,5 +136,12 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
       ? eq(timeEntries.id, id)
       : and(eq(timeEntries.id, id), eq(timeEntries.companyId, user.companyId)),
   );
+
+  await syncActualPointsForEntryTarget({
+    companyId: entry.companyId,
+    projectId: entry.projectId,
+    taskId: entry.taskId,
+    subtaskId: entry.subtaskId,
+  });
   return NextResponse.json({ ok: true });
 }

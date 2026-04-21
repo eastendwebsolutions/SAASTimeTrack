@@ -10,7 +10,11 @@ export async function GET(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const companyProjects = await db.query.projects.findMany({
-    where: and(eq(projects.companyId, user.companyId), eq(projects.syncedByUserId, user.id)),
+    where: and(
+      eq(projects.companyId, user.companyId),
+      eq(projects.syncedByUserId, user.id),
+      eq(projects.isActive, true),
+    ),
     columns: { id: true },
   });
   const companyProjectIds = companyProjects.map((project) => project.id);
@@ -20,7 +24,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden project" }, { status: 403 });
   }
 
-  const where = projectId ? eq(tasks.projectId, projectId) : inArray(tasks.projectId, companyProjectIds);
+  const where = projectId
+    ? and(eq(tasks.projectId, projectId), eq(tasks.isActive, true))
+    : and(inArray(tasks.projectId, companyProjectIds), eq(tasks.isActive, true));
   const data = await db.query.tasks.findMany({ where });
   return NextResponse.json(data);
 }

@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, or } from "drizzle-orm";
 import { Card } from "@/components/ui/card";
 import { canReviewEntries, isSuperAdmin } from "@/lib/auth/rbac";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
@@ -41,17 +41,37 @@ export default async function AdminTimesheetDetailPage({ searchParams }: { searc
     orderBy: (table, { asc }) => [asc(table.timeIn)],
   });
 
+  const entryProjectIds = [...new Set(entries.map((e) => e.projectId))];
+  const entryTaskIds = new Set<string>();
+  for (const e of entries) {
+    entryTaskIds.add(e.taskId);
+    if (e.subtaskId) entryTaskIds.add(e.subtaskId);
+  }
+  const entryTaskIdList = [...entryTaskIds];
+
   const companyProjects = await db.query.projects.findMany({
-    where: and(eq(projects.companyId, targetUser.companyId), eq(projects.syncedByUserId, targetUserId)),
+    where: and(
+      eq(projects.companyId, targetUser.companyId),
+      eq(projects.syncedByUserId, targetUserId),
+      entryProjectIds.length > 0
+        ? or(eq(projects.isActive, true), inArray(projects.id, entryProjectIds))
+        : eq(projects.isActive, true),
+    ),
     orderBy: (table, { asc }) => [asc(table.name)],
   });
   const projectIds = companyProjects.map((project) => project.id);
-  const companyTasks = projectIds.length
-    ? await db.query.tasks.findMany({
-        where: and(eq(tasks.isActive, true), inArray(tasks.projectId, projectIds)),
-        orderBy: (table, { asc }) => [asc(table.name)],
-      })
-    : [];
+  const companyTasks =
+    projectIds.length > 0
+      ? await db.query.tasks.findMany({
+          where: and(
+            inArray(tasks.projectId, projectIds),
+            entryTaskIdList.length > 0
+              ? or(eq(tasks.isActive, true), inArray(tasks.id, entryTaskIdList))
+              : eq(tasks.isActive, true),
+          ),
+          orderBy: (table, { asc }) => [asc(table.name)],
+        })
+      : [];
 
   return (
     <div className="space-y-4">

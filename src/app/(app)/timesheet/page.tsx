@@ -1,4 +1,4 @@
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, or } from "drizzle-orm";
 import { eachDayOfInterval, format } from "date-fns";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
@@ -22,8 +22,15 @@ export default async function TimesheetPage() {
     ),
     orderBy: (table, { desc }) => [desc(table.entryDate)],
   });
+  const entryProjectIds = [...new Set(entries.map((e) => e.projectId))];
   const projectOptions = await db.query.projects.findMany({
-    where: and(eq(projects.companyId, user.companyId), eq(projects.syncedByUserId, user.id)),
+    where: and(
+      eq(projects.companyId, user.companyId),
+      eq(projects.syncedByUserId, user.id),
+      entryProjectIds.length > 0
+        ? or(eq(projects.isActive, true), inArray(projects.id, entryProjectIds))
+        : eq(projects.isActive, true),
+    ),
     columns: { id: true, name: true },
     orderBy: (table, { asc }) => [asc(table.name)],
   });

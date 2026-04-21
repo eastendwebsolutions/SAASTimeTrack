@@ -31,6 +31,19 @@ type SegmentChunk = {
   entryDate: string;
 };
 
+const TIMER_DRAFT_STORAGE_KEY = "quick-entry-timer-draft:v1";
+
+type StoredQuickEntryDraft = {
+  projectSearch: string;
+  taskSearch: string;
+  subtaskSearch: string;
+  summary: string;
+  startedAt: string | null;
+  segments: Array<{ start: string; end: string }>;
+  manualTimeIn: string;
+  manualTimeOut: string;
+};
+
 function toLocalDateValue(date = new Date()) {
   const offsetMs = date.getTimezoneOffset() * 60_000;
   const local = new Date(date.getTime() - offsetMs);
@@ -87,6 +100,38 @@ export function QuickEntryForm({ projects, tasks }: Props) {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    const raw = window.localStorage.getItem(TIMER_DRAFT_STORAGE_KEY);
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw) as Partial<StoredQuickEntryDraft>;
+      if (typeof parsed.projectSearch === "string") setProjectSearch(parsed.projectSearch);
+      if (typeof parsed.taskSearch === "string") setTaskSearch(parsed.taskSearch);
+      if (typeof parsed.subtaskSearch === "string") setSubtaskSearch(parsed.subtaskSearch);
+      if (typeof parsed.summary === "string") setSummary(parsed.summary);
+      if (typeof parsed.manualTimeIn === "string") setManualTimeIn(parsed.manualTimeIn);
+      if (typeof parsed.manualTimeOut === "string") setManualTimeOut(parsed.manualTimeOut);
+      if (parsed.startedAt) {
+        const restoredStart = new Date(parsed.startedAt);
+        if (!Number.isNaN(restoredStart.getTime())) {
+          setStartedAt(restoredStart);
+        }
+      }
+      if (Array.isArray(parsed.segments)) {
+        const restoredSegments = parsed.segments
+          .map((segment) => ({
+            start: new Date(segment.start),
+            end: new Date(segment.end),
+          }))
+          .filter((segment) => !Number.isNaN(segment.start.getTime()) && !Number.isNaN(segment.end.getTime()));
+        setSegments(restoredSegments);
+      }
+    } catch {
+      window.localStorage.removeItem(TIMER_DRAFT_STORAGE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
     if (!startedAt) {
       return;
     }
@@ -94,6 +139,23 @@ export function QuickEntryForm({ projects, tasks }: Props) {
     const interval = window.setInterval(() => setTimerNow(new Date()), 1000);
     return () => window.clearInterval(interval);
   }, [startedAt]);
+
+  useEffect(() => {
+    const draft: StoredQuickEntryDraft = {
+      projectSearch,
+      taskSearch,
+      subtaskSearch,
+      summary,
+      startedAt: startedAt ? startedAt.toISOString() : null,
+      segments: segments.map((segment) => ({
+        start: segment.start.toISOString(),
+        end: segment.end.toISOString(),
+      })),
+      manualTimeIn,
+      manualTimeOut,
+    };
+    window.localStorage.setItem(TIMER_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  }, [manualTimeIn, manualTimeOut, projectSearch, segments, startedAt, subtaskSearch, summary, taskSearch]);
 
   const filteredProjects = useMemo(() => {
     const query = projectSearch.trim().toLowerCase();
@@ -225,6 +287,7 @@ export function QuickEntryForm({ projects, tasks }: Props) {
       setSummary("");
       setSubtaskSearch("");
       setMessage("Time entries saved.");
+      window.localStorage.removeItem(TIMER_DRAFT_STORAGE_KEY);
       window.location.href = "/timesheet";
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to save entries.");

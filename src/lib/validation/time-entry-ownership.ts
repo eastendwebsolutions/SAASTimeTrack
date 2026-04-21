@@ -12,14 +12,18 @@ export async function assertProjectTaskOwnedByUser(params: {
   const { ownerUserId, projectId, taskId, subtaskId } = params;
 
   const project = await db.query.projects.findFirst({
-    where: and(eq(projects.id, projectId), eq(projects.syncedByUserId, ownerUserId)),
+    where: and(
+      eq(projects.id, projectId),
+      eq(projects.syncedByUserId, ownerUserId),
+      eq(projects.isActive, true),
+    ),
   });
   if (!project) {
     throw new Error("Invalid project for this user");
   }
 
   const task = await db.query.tasks.findFirst({
-    where: and(eq(tasks.id, taskId), eq(tasks.projectId, project.id)),
+    where: and(eq(tasks.id, taskId), eq(tasks.projectId, project.id), eq(tasks.isActive, true)),
   });
   if (!task) {
     throw new Error("Invalid task for this project");
@@ -27,7 +31,7 @@ export async function assertProjectTaskOwnedByUser(params: {
 
   if (subtaskId) {
     const sub = await db.query.tasks.findFirst({
-      where: and(eq(tasks.id, subtaskId), eq(tasks.projectId, project.id)),
+      where: and(eq(tasks.id, subtaskId), eq(tasks.projectId, project.id), eq(tasks.isActive, true)),
     });
     if (!sub) {
       throw new Error("Invalid subtask for this project");

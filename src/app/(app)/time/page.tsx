@@ -12,14 +12,18 @@ export default async function TimePage() {
   }
 
   const availableProjects = await db.query.projects.findMany({
-    where: and(eq(projects.companyId, user.companyId), eq(projects.syncedByUserId, user.id)),
+    where: and(
+      eq(projects.companyId, user.companyId),
+      eq(projects.syncedByUserId, user.id),
+      eq(projects.isActive, true),
+    ),
     orderBy: (table, { asc }) => [asc(table.name)],
   });
   const projectIds = availableProjects.map((project) => project.id);
 
   const availableTasks = projectIds.length
     ? await db.query.tasks.findMany({
-        where: inArray(tasks.projectId, projectIds),
+        where: and(inArray(tasks.projectId, projectIds), eq(tasks.isActive, true)),
         orderBy: (table, { asc }) => [asc(table.name)],
       })
     : [];

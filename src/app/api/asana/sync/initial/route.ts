@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { syncUserAsanaData } from "@/lib/services/sync";
 
+export const maxDuration = 120;
+
 export async function POST() {
   const user = await getOrCreateCurrentUser();
   if (!user) {
