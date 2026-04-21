@@ -191,7 +191,7 @@ export function QuickEntryForm({ projects, tasks }: Props) {
   const visibleTopLevelTasks = useMemo(
     () =>
       topLevelTasks.filter(
-        (task) => Boolean(task.assignedUserId) || (assignedSubtasksByParent.get(task.id)?.length ?? 0) > 0,
+        (task) => (assignedSubtasksByParent.get(task.id)?.length ?? 0) > 0,
       ),
     [topLevelTasks, assignedSubtasksByParent],
   );
