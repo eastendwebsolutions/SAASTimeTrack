@@ -220,21 +220,27 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
           .returning();
 
         const taskData = await fetchProjectTasksPaginatedWithAuth(project.gid, asanaFetchWithRefresh);
-        const openTasks = taskData.filter(
-          (task) => !task.completed && task.assignee?.gid === meAsanaGid,
-        );
+        const activeTasks = taskData.filter((task) => !task.completed);
+        const assignedTasks = activeTasks.filter((task) => task.assignee?.gid === meAsanaGid);
+        const assignedTopLevel = assignedTasks.filter((task) => !task.parent?.gid);
+        const assignedSubtasks = assignedTasks.filter((task) => Boolean(task.parent?.gid));
 
-        const topLevel = openTasks.filter((task) => !task.parent?.gid);
-        const withParent = openTasks.filter((task) => Boolean(task.parent?.gid));
+        // Include unassigned parent tasks when they contain assigned subtasks, so UI can select those subtasks.
+        const requiredParentIds = new Set(assignedSubtasks.map((task) => task.parent!.gid));
+        const requiredParentTasks = activeTasks.filter((task) => requiredParentIds.has(task.gid));
+        const seenParentIds = new Set(requiredParentTasks.map((task) => task.gid));
+        const missingParentIds = [...requiredParentIds].filter((gid) => !seenParentIds.has(gid));
 
-        for (const task of topLevel) {
-          await db
+        const asanaTaskIdToLocalTaskId = new Map<string, string>();
+
+        for (const task of [...assignedTopLevel, ...requiredParentTasks]) {
+          const [upsertedTask] = await db
             .insert(tasks)
             .values({
               projectId: upsertedProject.id,
               asanaTaskId: task.gid,
               name: truncateName(task.name),
-              assignedUserId: userId,
+              assignedUserId: task.assignee?.gid === meAsanaGid ? userId : null,
               parentTaskId: null,
               isActive: true,
               lastSyncedAt: new Date(),
@@ -243,20 +249,28 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
               target: [tasks.projectId, tasks.asanaTaskId],
               set: {
                 name: truncateName(task.name),
-                assignedUserId: userId,
+                assignedUserId: task.assignee?.gid === meAsanaGid ? userId : null,
                 parentTaskId: null,
                 isActive: true,
                 lastSyncedAt: new Date(),
               },
-            });
+            })
+            .returning();
+          asanaTaskIdToLocalTaskId.set(task.gid, upsertedTask.id);
           tasksSynced += 1;
         }
 
-        for (const task of withParent) {
+        for (const parentAsanaGid of missingParentIds) {
           const parentTask = await db.query.tasks.findFirst({
-            where: and(eq(tasks.projectId, upsertedProject.id), eq(tasks.asanaTaskId, task.parent!.gid)),
+            where: and(eq(tasks.projectId, upsertedProject.id), eq(tasks.asanaTaskId, parentAsanaGid)),
           });
+          if (parentTask) {
+            asanaTaskIdToLocalTaskId.set(parentAsanaGid, parentTask.id);
+          }
+        }
 
+        for (const task of assignedSubtasks) {
+          const parentLocalId = asanaTaskIdToLocalTaskId.get(task.parent!.gid) ?? null;
           await db
             .insert(tasks)
             .values({
@@ -264,7 +278,7 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
               asanaTaskId: task.gid,
               name: truncateName(task.name),
               assignedUserId: userId,
-              parentTaskId: parentTask?.id ?? null,
+              parentTaskId: parentLocalId,
               isActive: true,
               lastSyncedAt: new Date(),
             })
@@ -273,7 +287,7 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
               set: {
                 name: truncateName(task.name),
                 assignedUserId: userId,
-                parentTaskId: parentTask?.id ?? null,
+                parentTaskId: parentLocalId,
                 isActive: true,
                 lastSyncedAt: new Date(),
               },
