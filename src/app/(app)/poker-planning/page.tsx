@@ -8,9 +8,6 @@ export default function PokerPlanningPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Poker Planning</h1>
         <div className="flex items-center gap-3">
-          <Link className="rounded-md bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700" href="/poker-planning/settings">
-            Asana Mapping
-          </Link>
           <Link className="rounded-md bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700" href="/poker-planning/history">
             Session History
           </Link>

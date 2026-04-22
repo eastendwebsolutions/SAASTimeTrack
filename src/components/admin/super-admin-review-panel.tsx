@@ -15,6 +15,7 @@ type UserRow = {
 type CompanyRow = {
   id: string;
   name: string;
+  asanaWorkspaceId: string | null;
 };
 
 type ProjectRow = {
@@ -46,6 +47,7 @@ type TimesheetRow = {
 type Props = {
   users: UserRow[];
   companies: CompanyRow[];
+  workspaceAdmins: Array<{ userId: string; asanaWorkspaceId: string }>;
   projects: ProjectRow[];
   entries: EntryRow[];
   submittedSheets: TimesheetRow[];
@@ -59,13 +61,21 @@ function formatHms(totalSeconds: number) {
   return `${hours}:${minutes}:${seconds}`;
 }
 
-export function SuperAdminReviewPanel({ users, companies, projects, entries, submittedSheets }: Props) {
+export function SuperAdminReviewPanel({ users, companies, workspaceAdmins, projects, entries, submittedSheets }: Props) {
   const [search, setSearch] = useState("");
   const [companyFilter, setCompanyFilter] = useState("all");
   const [userFilter, setUserFilter] = useState("all");
   const [projectFilter, setProjectFilter] = useState("all");
 
   const companyMap = useMemo(() => new Map(companies.map((company) => [company.id, company.name])), [companies]);
+  const companyWorkspaceMap = useMemo(
+    () => new Map(companies.map((company) => [company.id, company.asanaWorkspaceId])),
+    [companies],
+  );
+  const workspaceAdminSet = useMemo(
+    () => new Set(workspaceAdmins.map((item) => `${item.userId}:${item.asanaWorkspaceId}`)),
+    [workspaceAdmins],
+  );
   const userMap = useMemo(() => new Map(users.map((user) => [user.id, user])), [users]);
   const projectMap = useMemo(() => new Map(projects.map((project) => [project.id, project.name])), [projects]);
 
@@ -108,6 +118,7 @@ export function SuperAdminReviewPanel({ users, companies, projects, entries, sub
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Role</th>
                 <th className="px-4 py-3">Company</th>
+                <th className="px-4 py-3">Poker Planning Admin</th>
               </tr>
             </thead>
             <tbody>
@@ -116,6 +127,26 @@ export function SuperAdminReviewPanel({ users, companies, projects, entries, sub
                   <td className="px-4 py-3">{user.email}</td>
                   <td className="px-4 py-3 capitalize">{user.role}</td>
                   <td className="px-4 py-3">{companyMap.get(user.companyId) ?? user.companyId}</td>
+                  <td className="px-4 py-3">
+                    {companyWorkspaceMap.get(user.companyId) ? (
+                      (() => {
+                        const workspaceId = companyWorkspaceMap.get(user.companyId)!;
+                        const enabled = workspaceAdminSet.has(`${user.id}:${workspaceId}`);
+                        return (
+                          <form action={`/api/admin/users/${user.id}/poker-planning-admin`} method="post" className="flex items-center gap-2">
+                            <input type="hidden" name="workspaceId" value={workspaceId} />
+                            <input type="hidden" name="enabled" value={enabled ? "0" : "1"} />
+                            <Button type="submit" variant={enabled ? "secondary" : "primary"}>
+                              {enabled ? "Revoke" : "Grant"}
+                            </Button>
+                            <span className="text-xs text-zinc-500">{enabled ? "Enabled" : "Disabled"}</span>
+                          </form>
+                        );
+                      })()
+                    ) : (
+                      <span className="text-xs text-zinc-500">Workspace not synced yet</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

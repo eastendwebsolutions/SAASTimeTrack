@@ -58,6 +58,7 @@ export default async function AdminReviewPage() {
     const allCompanies = await db.query.companies.findMany({
       orderBy: (table, { asc }) => [asc(table.name)],
     });
+    const allWorkspaceAdmins = await db.query.ppWorkspaceAdmins.findMany();
     const allProjects = await db.query.projects.findMany({
       orderBy: (table, { asc }) => [asc(table.name)],
     });
@@ -106,6 +107,11 @@ export default async function AdminReviewPage() {
         companies={allCompanies.map((row) => ({
           id: row.id,
           name: row.name,
+          asanaWorkspaceId: row.asanaWorkspaceId,
+        }))}
+        workspaceAdmins={allWorkspaceAdmins.map((row) => ({
+          userId: row.userId,
+          asanaWorkspaceId: row.asanaWorkspaceId,
         }))}
         projects={allProjects.map((row) => ({
           id: row.id,

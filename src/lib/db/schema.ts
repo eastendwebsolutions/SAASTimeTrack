@@ -52,6 +52,7 @@ export const users = pgTable("users", {
   email: varchar("email", { length: 255 }).notNull(),
   asanaUserId: varchar("asana_user_id", { length: 100 }),
   role: roleEnum("role").notNull().default("user"),
+  isPokerPlanningAdmin: boolean("is_poker_planning_admin").notNull().default(false),
   companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
   timezone: varchar("timezone", { length: 100 }),
   ...timestamps,
@@ -297,4 +298,20 @@ export const ppHistoryLog = pgTable("pp_history_log", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   sessionCreatedIdx: index("pp_history_log_session_created_idx").on(table.sessionId, table.createdAt),
+}));
+
+export const ppWorkspaceAdmins = pgTable("pp_workspace_admins", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  asanaWorkspaceId: varchar("asana_workspace_id", { length: 100 }).notNull(),
+  createdByUserId: uuid("created_by_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  ...timestamps,
+}, (table) => ({
+  companyWorkspaceUserUnique: uniqueIndex("pp_workspace_admins_company_workspace_user_unique").on(
+    table.companyId,
+    table.asanaWorkspaceId,
+    table.userId,
+  ),
+  userWorkspaceIdx: index("pp_workspace_admins_user_workspace_idx").on(table.userId, table.asanaWorkspaceId),
 }));

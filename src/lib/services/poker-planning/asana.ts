@@ -15,6 +15,13 @@ type AsanaTask = {
   }>;
 };
 
+type AsanaCustomField = {
+  gid: string;
+  name?: string;
+  resource_subtype?: string;
+  enum_options?: Array<{ gid: string; name: string }>;
+};
+
 async function getAsanaAccessTokenForUser(userId: string) {
   const connection = await db.query.asanaConnections.findFirst({
     where: eq(asanaConnections.userId, userId),
@@ -157,4 +164,67 @@ export async function fetchSprintFieldOptions(args: { userId: string; projectGid
   }>(`/projects/${args.projectGid}/tasks?limit=1&opt_fields=custom_fields.gid,custom_fields.enum_options.gid,custom_fields.enum_options.name`);
   const field = task.data.custom_fields?.find((item) => item.gid === args.sprintFieldGid);
   return field?.enum_options ?? [];
+}
+
+function scoreSprintField(field: AsanaCustomField) {
+  const name = (field.name ?? "").toLowerCase();
+  let score = 0;
+  if (field.resource_subtype === "enum") score += 3;
+  if (name.includes("sprint")) score += 5;
+  if (name.includes("iteration")) score += 4;
+  if (name.includes("cycle")) score += 2;
+  return score;
+}
+
+function scoreStoryPointsField(field: AsanaCustomField) {
+  const name = (field.name ?? "").toLowerCase();
+  let score = 0;
+  if (field.resource_subtype === "number") score += 3;
+  if (name.includes("story points")) score += 6;
+  if (name === "points" || name === "sp") score += 3;
+  if (name.includes("estimate")) score += 2;
+  return score;
+}
+
+export async function detectPokerAsanaFields(args: { userId: string; projectGid: string }) {
+  const { request } = await getAsanaAccessTokenForUser(args.userId);
+  const projectResponse = await request<{ data: { workspace?: { gid: string } | null; custom_fields?: AsanaCustomField[] } }>(
+    `/projects/${args.projectGid}?opt_fields=workspace.gid,custom_fields.gid,custom_fields.name,custom_fields.resource_subtype,custom_fields.enum_options.gid,custom_fields.enum_options.name`,
+  );
+  const fields = projectResponse.data.custom_fields ?? [];
+
+  const sprintCandidates = fields
+    .map((field) => ({ field, score: scoreSprintField(field) }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score);
+  const storyPointCandidates = fields
+    .map((field) => ({ field, score: scoreStoryPointsField(field) }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  const sprint = sprintCandidates[0]?.field
+    ? {
+        gid: sprintCandidates[0].field.gid,
+        name: sprintCandidates[0].field.name ?? "Sprint",
+        enumOptions: sprintCandidates[0].field.enum_options ?? [],
+        ambiguous:
+          sprintCandidates.length > 1 && sprintCandidates[0].score === sprintCandidates[1].score,
+      }
+    : null;
+
+  const storyPoints = storyPointCandidates[0]?.field
+    ? {
+        gid: storyPointCandidates[0].field.gid,
+        name: storyPointCandidates[0].field.name ?? "Story Points",
+        ambiguous:
+          storyPointCandidates.length > 1 && storyPointCandidates[0].score === storyPointCandidates[1].score,
+      }
+    : null;
+
+  return {
+    workspaceGid: projectResponse.data.workspace?.gid ?? null,
+    sprint,
+    storyPoints,
+    needsManualMapping: !sprint || !storyPoints || sprint.ambiguous || storyPoints.ambiguous,
+  };
 }

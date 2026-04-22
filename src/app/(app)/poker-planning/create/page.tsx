@@ -1,15 +1,16 @@
 import { asc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { PokerSessionCreateForm } from "@/components/poker-planning/poker-session-create-form";
-import { canManagePokerPlanning } from "@/lib/auth/rbac";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { getCompanyPokerAsanaMapping } from "@/lib/services/poker-planning/asana";
+import { hasAnyPokerWorkspaceAdminAccess } from "@/lib/services/poker-planning/auth";
 
 export default async function PokerPlanningCreatePage() {
   const user = await getOrCreateCurrentUser();
-  if (!user || !canManagePokerPlanning(user.role)) {
+  const hasAccess = user ? await hasAnyPokerWorkspaceAdminAccess(user.id, user.companyId) : false;
+  if (!user || (user.role !== "super_admin" && !hasAccess)) {
     redirect("/poker-planning");
   }
 

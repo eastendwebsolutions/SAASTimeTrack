@@ -1,12 +1,13 @@
 import { redirect } from "next/navigation";
 import { PokerAsanaMappingForm } from "@/components/poker-planning/poker-asana-mapping-form";
-import { canManagePokerPlanning } from "@/lib/auth/rbac";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { getCompanyPokerAsanaMapping } from "@/lib/services/poker-planning/asana";
+import { hasAnyPokerWorkspaceAdminAccess } from "@/lib/services/poker-planning/auth";
 
 export default async function PokerPlanningSettingsPage() {
   const user = await getOrCreateCurrentUser();
-  if (!user || !canManagePokerPlanning(user.role)) {
+  const hasAccess = user ? await hasAnyPokerWorkspaceAdminAccess(user.id, user.companyId) : false;
+  if (!user || (user.role !== "super_admin" && !hasAccess)) {
     redirect("/poker-planning");
   }
   const mapping = await getCompanyPokerAsanaMapping(user.companyId);

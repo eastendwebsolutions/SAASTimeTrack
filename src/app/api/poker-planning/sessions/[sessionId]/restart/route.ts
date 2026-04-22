@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { requirePokerAdmin } from "@/lib/services/poker-planning/auth";
+import { requirePokerAdminForSession } from "@/lib/services/poker-planning/auth";
 import { restartSession } from "@/lib/services/poker-planning/session";
 
 type Params = Promise<{ sessionId: string }>;
@@ -12,8 +12,8 @@ const restartSchema = z.object({
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   try {
-    const user = await requirePokerAdmin();
     const { sessionId } = await params;
+    const user = await requirePokerAdminForSession(sessionId);
     const payload = restartSchema.parse(await request.json());
     await restartSession({
       sessionId,

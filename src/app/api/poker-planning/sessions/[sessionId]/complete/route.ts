@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { requirePokerAdmin } from "@/lib/services/poker-planning/auth";
+import { requirePokerAdminForSession } from "@/lib/services/poker-planning/auth";
 import { completeSession } from "@/lib/services/poker-planning/session";
 
 type Params = Promise<{ sessionId: string }>;
 
 export async function POST(_: Request, { params }: { params: Params }) {
   try {
-    const user = await requirePokerAdmin();
     const { sessionId } = await params;
+    const user = await requirePokerAdminForSession(sessionId);
     await completeSession({ sessionId, actorUserId: user.id, companyId: user.companyId });
     return NextResponse.json({ ok: true });
   } catch (error) {

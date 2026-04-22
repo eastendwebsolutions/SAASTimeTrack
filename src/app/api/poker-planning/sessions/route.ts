@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { requirePokerAdmin, requirePokerUser } from "@/lib/services/poker-planning/auth";
+import { updateCompanyPokerAsanaMapping } from "@/lib/services/poker-planning/asana";
+import { requirePokerAdmin, requirePokerAdminForWorkspace, requirePokerUser } from "@/lib/services/poker-planning/auth";
 import { createSession, listSessions } from "@/lib/services/poker-planning/session";
 
 const createSessionSchema = z.object({
   title: z.string().min(2).max(255),
+  asanaWorkspaceId: z.string().min(1),
   asanaProjectId: z.string().min(1),
   sprintFieldGid: z.string().min(1),
   sprintFieldName: z.string().min(1),
   selectedSprintValueGid: z.string().min(1),
   selectedSprintValueName: z.string().min(1),
+  storyPointsFieldGid: z.string().min(1).optional(),
+  storyPointsFieldName: z.string().min(1).optional(),
   writebackMode: z.enum(["immediate", "on_sprint_completion"]),
   participantUserIds: z.array(z.string().uuid()).default([]),
 });
@@ -31,11 +35,22 @@ export async function POST(request: NextRequest) {
   try {
     const user = await requirePokerAdmin();
     const payload = createSessionSchema.parse(await request.json());
+    await requirePokerAdminForWorkspace(payload.asanaWorkspaceId);
     const result = await createSession({
       companyId: user.companyId,
       actorUserId: user.id,
       ...payload,
     });
+    if (payload.storyPointsFieldGid && payload.storyPointsFieldName) {
+      await updateCompanyPokerAsanaMapping({
+        companyId: user.companyId,
+        actorUserId: user.id,
+        sprintFieldGid: payload.sprintFieldGid,
+        sprintFieldName: payload.sprintFieldName,
+        storyPointsFieldGid: payload.storyPointsFieldGid,
+        storyPointsFieldName: payload.storyPointsFieldName,
+      });
+    }
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { requirePokerAdmin } from "@/lib/services/poker-planning/auth";
+import { requirePokerAdminForSession } from "@/lib/services/poker-planning/auth";
 import { assignParticipants } from "@/lib/services/poker-planning/session";
 
 type Params = Promise<{ sessionId: string }>;
@@ -8,8 +8,8 @@ const schema = z.object({ participantUserIds: z.array(z.string().uuid()) });
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   try {
-    const user = await requirePokerAdmin();
     const { sessionId } = await params;
+    const user = await requirePokerAdminForSession(sessionId);
     const payload = schema.parse(await request.json());
     await assignParticipants({
       sessionId,

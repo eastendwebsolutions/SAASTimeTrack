@@ -54,6 +54,7 @@ export async function createSession(args: {
   companyId: string;
   actorUserId: string;
   title: string;
+  asanaWorkspaceId: string;
   asanaProjectId: string;
   sprintFieldGid: string;
   sprintFieldName: string;
@@ -68,6 +69,7 @@ export async function createSession(args: {
       companyId: args.companyId,
       createdByUserId: args.actorUserId,
       title: args.title,
+      asanaWorkspaceId: args.asanaWorkspaceId,
       asanaProjectId: args.asanaProjectId,
       sprintFieldGid: args.sprintFieldGid,
       sprintFieldName: args.sprintFieldName,
