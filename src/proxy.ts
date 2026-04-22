@@ -4,6 +4,7 @@ const isProtectedRoute = createRouteMatcher([
   "/time(.*)",
   "/timesheet(.*)",
   "/admin(.*)",
+  "/poker-planning(.*)",
   "/settings(.*)",
   "/api/(.*)",
 ]);

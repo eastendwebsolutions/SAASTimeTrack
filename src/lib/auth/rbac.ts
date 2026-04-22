@@ -11,3 +11,7 @@ export function canManageCompanySettings(role: Role) {
 export function isSuperAdmin(role: Role) {
   return role === "super_admin";
 }
+
+export function canManagePokerPlanning(role: Role) {
+  return role === "company_admin" || role === "super_admin";
+}

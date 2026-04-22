@@ -46,6 +46,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <Link href="/time">Time</Link>
               <Link href="/timesheet">Timesheet</Link>
               <Link href="/timesheet/archive">Archive</Link>
+              <Link href="/poker-planning">Poker Planning</Link>
               <Link href="/admin/review">Admin</Link>
               <Link href="/settings/integrations">Integrations</Link>
               <Link href="/settings/profile">Profile</Link>
