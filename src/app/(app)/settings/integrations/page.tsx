@@ -148,6 +148,70 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
         </Card>
       ) : null}
       <Card className="p-5">
+        <h2 className="mb-2 font-medium">Asana</h2>
+        <p className="mb-4 text-sm text-zinc-400">
+          {connection ? "Connected" : "Not connected"}. Each user connects their own Asana account—no workspace-wide app install.
+          Sync pulls projects you can access and tasks assigned to you, stored for your account only.
+        </p>
+        <p className="mb-4 text-sm text-zinc-500">
+          The Asana account used for sync is whichever account you <strong>approve in the Asana OAuth screen</strong> while signed into
+          SAASTimeTrack as this profile. It is tied to your SAASTimeTrack user id—not whichever account happens to be open in another
+          browser tab on asana.com.
+        </p>
+        {connection ? (
+          <div className="mb-4 rounded-md border border-zinc-800 bg-zinc-950/60 px-3 py-3 text-sm text-zinc-300">
+            <p className="font-medium text-zinc-100">Identity check</p>
+            <ul className="mt-2 list-inside list-disc space-y-1 text-zinc-400">
+              <li>
+                <span className="text-zinc-500">SAASTimeTrack profile (this login):</span>{" "}
+                <span className="text-zinc-100">{user.email}</span>
+              </li>
+              <li>
+                <span className="text-zinc-500">Asana account linked to this profile:</span>{" "}
+                {asanaMe ? (
+                  <span className="text-zinc-100">
+                    {asanaMe.name ?? "—"}
+                    {asanaMe.email ? ` · ${asanaMe.email}` : null}
+                    {asanaMe.email ? null : " (no email returned by Asana)"}
+                  </span>
+                ) : (
+                  <span className="text-amber-200/90">
+                    Could not load (token may be expired). Use Reconnect Asana if this persists.
+                  </span>
+                )}
+              </li>
+            </ul>
+            {asanaMe?.email &&
+            user.email.toLowerCase().trim() !== asanaMe.email.toLowerCase().trim() ? (
+              <p className="mt-2 text-xs text-amber-200/90">
+                These emails differ. Sync still runs only for <strong>this</strong> SAASTimeTrack user; the data is whatever that linked
+                Asana user can see. Use Reconnect if you meant to use the same email in both places.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        <a href="/api/asana/connect/url">
+          <Button>{connection ? "Reconnect Asana" : "Connect Asana"}</Button>
+        </a>
+        <AsanaSyncPanel
+          connected={Boolean(connection)}
+          triggerInitialSync={triggerInitialSync}
+          initialRun={
+            latestAsanaRun
+              ? {
+                  status: latestAsanaRun.status,
+                  startedAt: latestAsanaRun.startedAt.toISOString(),
+                  endedAt: latestAsanaRun.endedAt?.toISOString() ?? null,
+                  error: latestAsanaRun.error ?? null,
+                  projectsSynced: latestAsanaRun.projectsSynced,
+                  tasksSynced: latestAsanaRun.tasksSynced,
+                  subtasksSynced: latestAsanaRun.subtasksSynced,
+                }
+              : null
+          }
+        />
+      </Card>
+      <Card className="p-5">
         <h2 className="mb-2 font-medium">Jira (Safe Rollout)</h2>
         <p className="mb-4 text-sm text-zinc-400">
           Jira is being reintroduced with outage-safe gating. It will only activate after database migration and feature flag checks pass.
@@ -212,70 +276,6 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
             }
           />
         </div>
-      </Card>
-      <Card className="p-5">
-        <h2 className="mb-2 font-medium">Asana</h2>
-        <p className="mb-4 text-sm text-zinc-400">
-          {connection ? "Connected" : "Not connected"}. Each user connects their own Asana account—no workspace-wide app install.
-          Sync pulls projects you can access and tasks assigned to you, stored for your account only.
-        </p>
-        <p className="mb-4 text-sm text-zinc-500">
-          The Asana account used for sync is whichever account you <strong>approve in the Asana OAuth screen</strong> while signed into
-          SAASTimeTrack as this profile. It is tied to your SAASTimeTrack user id—not whichever account happens to be open in another
-          browser tab on asana.com.
-        </p>
-        {connection ? (
-          <div className="mb-4 rounded-md border border-zinc-800 bg-zinc-950/60 px-3 py-3 text-sm text-zinc-300">
-            <p className="font-medium text-zinc-100">Identity check</p>
-            <ul className="mt-2 list-inside list-disc space-y-1 text-zinc-400">
-              <li>
-                <span className="text-zinc-500">SAASTimeTrack profile (this login):</span>{" "}
-                <span className="text-zinc-100">{user.email}</span>
-              </li>
-              <li>
-                <span className="text-zinc-500">Asana account linked to this profile:</span>{" "}
-                {asanaMe ? (
-                  <span className="text-zinc-100">
-                    {asanaMe.name ?? "—"}
-                    {asanaMe.email ? ` · ${asanaMe.email}` : null}
-                    {asanaMe.email ? null : " (no email returned by Asana)"}
-                  </span>
-                ) : (
-                  <span className="text-amber-200/90">
-                    Could not load (token may be expired). Use Reconnect Asana if this persists.
-                  </span>
-                )}
-              </li>
-            </ul>
-            {asanaMe?.email &&
-            user.email.toLowerCase().trim() !== asanaMe.email.toLowerCase().trim() ? (
-              <p className="mt-2 text-xs text-amber-200/90">
-                These emails differ. Sync still runs only for <strong>this</strong> SAASTimeTrack user; the data is whatever that linked
-                Asana user can see. Use Reconnect if you meant to use the same email in both places.
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-        <a href="/api/asana/connect/url">
-          <Button>{connection ? "Reconnect Asana" : "Connect Asana"}</Button>
-        </a>
-        <AsanaSyncPanel
-          connected={Boolean(connection)}
-          triggerInitialSync={triggerInitialSync}
-          initialRun={
-            latestAsanaRun
-              ? {
-                  status: latestAsanaRun.status,
-                  startedAt: latestAsanaRun.startedAt.toISOString(),
-                  endedAt: latestAsanaRun.endedAt?.toISOString() ?? null,
-                  error: latestAsanaRun.error ?? null,
-                  projectsSynced: latestAsanaRun.projectsSynced,
-                  tasksSynced: latestAsanaRun.tasksSynced,
-                  subtasksSynced: latestAsanaRun.subtasksSynced,
-                }
-              : null
-          }
-        />
       </Card>
     </div>
   );
