@@ -1,0 +1,132 @@
+import { getEnv } from "@/lib/env";
+
+const ATLASSIAN_AUTH_BASE = "https://auth.atlassian.com";
+
+export type JiraTokenResponse = {
+  access_token: string;
+  refresh_token?: string;
+  expires_in?: number;
+  scope?: string;
+  token_type?: string;
+};
+
+export type JiraAccessibleResource = {
+  id: string;
+  url: string;
+  name: string;
+  scopes: string[];
+};
+
+export type JiraMeIdentity = {
+  accountId: string;
+  displayName: string;
+  emailAddress: string | null;
+};
+
+function getJiraEnv() {
+  const env = getEnv();
+  const clientId = env.JIRA_CLIENT_ID;
+  const clientSecret = env.JIRA_CLIENT_SECRET;
+  const redirectUri = env.JIRA_REDIRECT_URI;
+  if (!clientId || !clientSecret || !redirectUri) {
+    throw new Error("Jira OAuth is not configured");
+  }
+  return { clientId, clientSecret, redirectUri };
+}
+
+export function getJiraAuthorizationUrl(state: string) {
+  const env = getJiraEnv();
+  const params = new URLSearchParams({
+    audience: "api.atlassian.com",
+    client_id: env.clientId,
+    scope: "read:jira-work read:jira-user offline_access",
+    redirect_uri: env.redirectUri,
+    state,
+    response_type: "code",
+    prompt: "consent",
+  });
+  return `${ATLASSIAN_AUTH_BASE}/authorize?${params.toString()}`;
+}
+
+export async function exchangeJiraCode(code: string) {
+  const env = getJiraEnv();
+  const response = await fetch(`${ATLASSIAN_AUTH_BASE}/oauth/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      grant_type: "authorization_code",
+      client_id: env.clientId,
+      client_secret: env.clientSecret,
+      code,
+      redirect_uri: env.redirectUri,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to exchange Jira code (${response.status}): ${await response.text()}`);
+  }
+  return response.json() as Promise<JiraTokenResponse>;
+}
+
+export async function refreshJiraAccessToken(refreshToken: string) {
+  const env = getJiraEnv();
+  const response = await fetch(`${ATLASSIAN_AUTH_BASE}/oauth/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      grant_type: "refresh_token",
+      client_id: env.clientId,
+      client_secret: env.clientSecret,
+      refresh_token: refreshToken,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to refresh Jira token (${response.status}): ${await response.text()}`);
+  }
+  return response.json() as Promise<JiraTokenResponse>;
+}
+
+export async function fetchJiraAccessibleResources(accessToken: string) {
+  const response = await fetch(`${ATLASSIAN_AUTH_BASE}/oauth/token/accessible-resources`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch Jira resources (${response.status}): ${await response.text()}`);
+  }
+  return response.json() as Promise<JiraAccessibleResource[]>;
+}
+
+export async function jiraRequest<T>(
+  cloudId: string,
+  path: string,
+  accessToken: string,
+  init: { method?: "GET" | "POST" | "PUT"; body?: unknown } = {},
+) {
+  const response = await fetch(`https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3${path}`, {
+    method: init.method ?? "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(`Jira API failed with ${response.status} for ${path}: ${await response.text()}`);
+  }
+  return response.json() as Promise<T>;
+}
+
+export async function fetchJiraMe(cloudId: string, accessToken: string): Promise<JiraMeIdentity> {
+  const data = await jiraRequest<{ accountId: string; displayName: string; emailAddress?: string }>(
+    cloudId,
+    "/myself",
+    accessToken,
+  );
+  return {
+    accountId: data.accountId,
+    displayName: data.displayName,
+    emailAddress: data.emailAddress?.trim() || null,
+  };
+}

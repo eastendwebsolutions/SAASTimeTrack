@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { canReviewEntries, isSuperAdmin } from "@/lib/auth/rbac";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
+import { getActiveProviderForUser } from "@/lib/integrations/provider";
 import { projects, tasks, timeEntries, users } from "@/lib/db/schema";
 import { listAuditChanges } from "@/lib/services/audit-log";
 import { getWeekBounds } from "@/lib/services/week";
@@ -34,6 +35,7 @@ export default async function AdminTimesheetDetailPage({ searchParams }: { searc
   if (!targetUser) {
     return <p className="text-zinc-400">User not found.</p>;
   }
+  const activeProvider = getActiveProviderForUser(targetUser);
   if (!isSuperAdmin(user.role) && targetUser.companyId !== user.companyId) {
     return <p className="text-zinc-400">Forbidden.</p>;
   }
@@ -56,6 +58,7 @@ export default async function AdminTimesheetDetailPage({ searchParams }: { searc
     where: and(
       eq(projects.companyId, targetUser.companyId),
       eq(projects.syncedByUserId, targetUserId),
+      eq(projects.provider, activeProvider),
       entryProjectIds.length > 0
         ? or(eq(projects.isActive, true), inArray(projects.id, entryProjectIds))
         : eq(projects.isActive, true),

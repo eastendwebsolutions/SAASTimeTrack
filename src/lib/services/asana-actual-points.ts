@@ -59,9 +59,10 @@ async function updateAsanaActualPoints(target: EntryTarget) {
 
   const projectRow = await db.query.projects.findFirst({
     where: eq(projects.id, target.projectId),
-    columns: { syncedByUserId: true },
+    columns: { syncedByUserId: true, provider: true },
   });
   if (!projectRow) return;
+  if (projectRow.provider !== "asana") return;
   const syncedByUserId = projectRow.syncedByUserId;
 
   const connection = await db.query.asanaConnections.findFirst({

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
 import { projects, timeEntries, timesheets } from "@/lib/db/schema";
+import { getActiveProviderForUser } from "@/lib/integrations/provider";
 import { listAuditChanges } from "@/lib/services/audit-log";
 import { getWeekBounds } from "@/lib/services/week";
 import { TimesheetClient } from "@/components/timesheet/timesheet-client";
@@ -16,6 +17,7 @@ type SearchParams = Promise<{ auditPage?: string }>;
 export default async function TimesheetPage({ searchParams }: { searchParams: SearchParams }) {
   const user = await getOrCreateCurrentUser();
   if (!user) return null;
+  const activeProvider = getActiveProviderForUser(user);
   const params = await searchParams;
   const auditPage = Math.max(1, Number(params.auditPage ?? "1") || 1);
 
@@ -33,6 +35,7 @@ export default async function TimesheetPage({ searchParams }: { searchParams: Se
     where: and(
       eq(projects.companyId, user.companyId),
       eq(projects.syncedByUserId, user.id),
+      eq(projects.provider, activeProvider),
       entryProjectIds.length > 0
         ? or(eq(projects.isActive, true), inArray(projects.id, entryProjectIds))
         : eq(projects.isActive, true),

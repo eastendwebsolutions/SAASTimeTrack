@@ -2,17 +2,20 @@ import { and, eq, inArray } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
+import { getActiveProviderForUser } from "@/lib/integrations/provider";
 import { projects, tasks } from "@/lib/db/schema";
 
 export async function GET(request: NextRequest) {
   const projectId = request.nextUrl.searchParams.get("projectId");
   const user = await getOrCreateCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const activeProvider = getActiveProviderForUser(user);
 
   const companyProjects = await db.query.projects.findMany({
     where: and(
       eq(projects.companyId, user.companyId),
       eq(projects.syncedByUserId, user.id),
+      eq(projects.provider, activeProvider),
       eq(projects.isActive, true),
     ),
     columns: { id: true },

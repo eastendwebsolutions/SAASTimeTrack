@@ -5,32 +5,37 @@ import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import type { IntegrationProvider } from "@/lib/integrations/provider";
 
 const SYNC_REMINDER_INTERVAL_MS = 8 * 60 * 60 * 1000;
 
 type Props = {
-  asanaConnected: boolean;
+  provider: IntegrationProvider;
+  connected: boolean;
   lastSyncLabel: string;
   lastSyncedAtIso: string | null;
   timezone: string;
 };
 
-function getReminderKey(userId: string) {
-  return `saastimetrack:asana-sync-reminder:last-prompt:${userId}`;
+function getReminderKey(userId: string, provider: IntegrationProvider) {
+  return `saastimetrack:${provider}-sync-reminder:last-prompt:${userId}`;
 }
 
-export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, lastSyncedAtIso, timezone }: Props) {
+export function AsanaHeaderStatus({ provider, connected, lastSyncLabel, lastSyncedAtIso, timezone }: Props) {
   const { userId } = useAuth();
   const router = useRouter();
   const [isSyncing, setIsSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [showReminder, setShowReminder] = useState(false);
+  const providerLabel = provider === "jira" ? "Jira" : "Asana";
+  const syncEndpoint = provider === "jira" ? "/api/jira/sync/initial" : "/api/asana/sync/initial";
+  const integrationSettingsHref = "/settings/integrations";
 
   async function syncNow() {
     setMessage(null);
     setIsSyncing(true);
     try {
-      const response = await fetch("/api/asana/sync/initial", { method: "POST" });
+      const response = await fetch(syncEndpoint, { method: "POST" });
       const data = (await response.json().catch(() => ({}))) as {
         ok?: boolean;
         debugBuild?: string;
@@ -70,9 +75,9 @@ export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, lastSyncedAtI
   }, [lastSyncedAtIso]);
 
   useEffect(() => {
-    if (!userId || !asanaConnected) return;
+    if (!userId || !connected) return;
 
-    const reminderKey = getReminderKey(userId);
+    const reminderKey = getReminderKey(userId, provider);
 
     const evaluateReminder = () => {
       const now = Date.now();
@@ -91,18 +96,18 @@ export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, lastSyncedAtI
     evaluateReminder();
     const timer = window.setInterval(evaluateReminder, 60_000);
     return () => window.clearInterval(timer);
-  }, [asanaConnected, lastSyncedAtMs, userId]);
+  }, [connected, lastSyncedAtMs, provider, userId]);
 
   function remindLater() {
     if (userId) {
-      window.localStorage.setItem(getReminderKey(userId), String(Date.now()));
+      window.localStorage.setItem(getReminderKey(userId, provider), String(Date.now()));
     }
     setShowReminder(false);
   }
 
   async function syncFromReminder() {
     if (userId) {
-      window.localStorage.setItem(getReminderKey(userId), String(Date.now()));
+      window.localStorage.setItem(getReminderKey(userId, provider), String(Date.now()));
     }
     await syncNow();
   }
@@ -110,11 +115,11 @@ export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, lastSyncedAtI
   return (
     <>
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-300">
-        <p className="font-medium text-zinc-100">Asana: {asanaConnected ? "Connected" : "Not Connected"}</p>
+        <p className="font-medium text-zinc-100">{providerLabel}: {connected ? "Connected" : "Not Connected"}</p>
         <p>Last sync: {lastSyncLabel}</p>
         <p>Timezone: {timezone}</p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          {asanaConnected ? (
+          {connected ? (
             <Button
               type="button"
               variant="secondary"
@@ -122,14 +127,14 @@ export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, lastSyncedAtI
               disabled={isSyncing}
               onClick={() => void syncNow()}
             >
-              {isSyncing ? "Syncing…" : "Sync Asana"}
+              {isSyncing ? "Syncing..." : `Sync ${providerLabel}`}
             </Button>
           ) : (
             <Link
-              href="/settings/integrations"
+              href={integrationSettingsHref}
               className="inline-flex rounded-md bg-zinc-800 px-2 py-1 text-xs font-medium text-zinc-100 transition hover:bg-zinc-700"
             >
-              Connect Asana
+              {`Connect ${providerLabel}`}
             </Link>
           )}
         </div>
@@ -140,14 +145,14 @@ export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, lastSyncedAtI
           <div className="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
             <h2 className="text-lg font-semibold text-zinc-100">Asana sync reminder</h2>
             <p className="mt-2 text-sm text-zinc-300">
-              Your Asana data has not been synced in over 8 hours. Sync now to keep project and task options current.
+              {providerLabel} data has not been synced in over 8 hours. Sync now to keep project and task options current.
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <Button type="button" variant="secondary" onClick={remindLater}>
                 Later
               </Button>
               <Button type="button" disabled={isSyncing} onClick={() => void syncFromReminder()}>
-                {isSyncing ? "Syncing…" : "Sync Asana now"}
+                {isSyncing ? "Syncing..." : `Sync ${providerLabel} now`}
               </Button>
             </div>
           </div>

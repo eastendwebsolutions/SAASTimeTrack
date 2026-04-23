@@ -11,7 +11,7 @@ export async function GET() {
   }
 
   const latestRun = await db.query.syncRuns.findFirst({
-    where: and(eq(syncRuns.companyId, user.companyId), eq(syncRuns.userId, user.id), eq(syncRuns.provider, "asana")),
+    where: and(eq(syncRuns.companyId, user.companyId), eq(syncRuns.userId, user.id), eq(syncRuns.provider, "jira")),
     orderBy: (table) => [desc(table.startedAt)],
   });
 
