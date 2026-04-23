@@ -11,6 +11,7 @@ import { getJiraReadiness } from "@/lib/integrations/jira-readiness";
 import { IntegrationLabel } from "@/components/integrations/integration-label";
 import { getMondayReadiness } from "@/lib/integrations/monday-readiness";
 import { getActiveProviderForUser } from "@/lib/integrations/provider";
+import { isMissingIntegrationSchemaError } from "@/lib/integrations/schema-compat";
 
 const ASANA_ERROR_MESSAGES: Record<string, string> = {
   missing_params: "Asana did not return a complete authorization response. Use Connect Asana again.",
@@ -86,14 +87,24 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
     where: eq(asanaConnections.userId, user.id),
   });
   const jiraConnection = jiraReadiness.schemaReady
-    ? await db.query.jiraConnections.findFirst({
-        where: eq(jiraConnections.userId, user.id),
-      })
+    ? await db.query.jiraConnections
+        .findFirst({
+          where: eq(jiraConnections.userId, user.id),
+        })
+        .catch((error) => {
+          if (!isMissingIntegrationSchemaError(error)) throw error;
+          return null;
+        })
     : null;
   const mondayConnection = mondayReadiness.schemaReady
-    ? await db.query.mondayConnections.findFirst({
-        where: eq(mondayConnections.userId, user.id),
-      })
+    ? await db.query.mondayConnections
+        .findFirst({
+          where: eq(mondayConnections.userId, user.id),
+        })
+        .catch((error) => {
+          if (!isMissingIntegrationSchemaError(error)) throw error;
+          return null;
+        })
     : null;
 
   let asanaMe: Awaited<ReturnType<typeof fetchAsanaMe>> | null = null;
@@ -114,24 +125,34 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
     orderBy: (table) => [desc(table.startedAt)],
   });
   const latestJiraRun = jiraReadiness.schemaReady
-    ? await db.query.syncRuns.findFirst({
-        where: and(
-          eq(syncRuns.companyId, user.companyId),
-          eq(syncRuns.userId, user.id),
-          inArray(syncRuns.type, ["jira_initial", "jira_periodic", "jira_manual"]),
-        ),
-        orderBy: (table) => [desc(table.startedAt)],
-      })
+    ? await db.query.syncRuns
+        .findFirst({
+          where: and(
+            eq(syncRuns.companyId, user.companyId),
+            eq(syncRuns.userId, user.id),
+            inArray(syncRuns.type, ["jira_initial", "jira_periodic", "jira_manual"]),
+          ),
+          orderBy: (table) => [desc(table.startedAt)],
+        })
+        .catch((error) => {
+          if (!isMissingIntegrationSchemaError(error)) throw error;
+          return null;
+        })
     : null;
   const latestMondayRun = mondayReadiness.schemaReady
-    ? await db.query.syncRuns.findFirst({
-        where: and(
-          eq(syncRuns.companyId, user.companyId),
-          eq(syncRuns.userId, user.id),
-          inArray(syncRuns.type, ["monday_initial", "monday_periodic", "monday_manual"]),
-        ),
-        orderBy: (table) => [desc(table.startedAt)],
-      })
+    ? await db.query.syncRuns
+        .findFirst({
+          where: and(
+            eq(syncRuns.companyId, user.companyId),
+            eq(syncRuns.userId, user.id),
+            inArray(syncRuns.type, ["monday_initial", "monday_periodic", "monday_manual"]),
+          ),
+          orderBy: (table) => [desc(table.startedAt)],
+        })
+        .catch((error) => {
+          if (!isMissingIntegrationSchemaError(error)) throw error;
+          return null;
+        })
     : null;
 
   return (
