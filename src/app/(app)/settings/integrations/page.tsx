@@ -7,6 +7,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AsanaSyncPanel } from "@/components/integrations/asana-sync-panel";
+import { getJiraReadiness } from "@/lib/integrations/jira-readiness";
 
 const ASANA_ERROR_MESSAGES: Record<string, string> = {
   missing_params: "Asana did not return a complete authorization response. Use Connect Asana again.",
@@ -31,6 +32,8 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
   const triggerInitialSync = params.asana_connected === "1";
   const appBase = (process.env.NEXT_PUBLIC_APP_URL ?? "https://your-production-domain").replace(/\/$/, "");
   const asanaCallbackExample = `${appBase}/api/asana/callback`;
+  const jiraCallbackExample = `${appBase}/api/jira/callback`;
+  const jiraReadiness = await getJiraReadiness();
 
   const connection = await db.query.asanaConnections.findFirst({
     where: eq(asanaConnections.userId, user.id),
@@ -87,6 +90,40 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
           <p className="mt-3 text-xs text-amber-300/80">Save variables, then redeploy the project. After that, use Connect Asana again.</p>
         </Card>
       ) : null}
+      <Card className="p-5">
+        <h2 className="mb-2 font-medium">Jira (Safe Rollout)</h2>
+        <p className="mb-4 text-sm text-zinc-400">
+          Jira is being reintroduced with outage-safe gating. It will only activate after database migration and feature flag checks pass.
+        </p>
+        <div className="rounded-md border border-zinc-800 bg-zinc-950/60 p-3 text-sm text-zinc-300">
+          <p>
+            Environment configured:{" "}
+            <span className={jiraReadiness.envReady ? "text-emerald-400" : "text-amber-300"}>
+              {jiraReadiness.envReady ? "Ready" : "Pending"}
+            </span>
+          </p>
+          <p>
+            Database migration applied:{" "}
+            <span className={jiraReadiness.schemaReady ? "text-emerald-400" : "text-amber-300"}>
+              {jiraReadiness.schemaReady ? "Ready" : "Pending"}
+            </span>
+          </p>
+          <p>
+            Feature flag enabled:{" "}
+            <span className={jiraReadiness.featureEnabled ? "text-emerald-400" : "text-amber-300"}>
+              {jiraReadiness.featureEnabled ? "Ready" : "Pending"}
+            </span>
+          </p>
+          <p className="mt-2 text-xs text-zinc-500">
+            Callback target: <code className="text-zinc-300">{jiraCallbackExample}</code>
+          </p>
+          {!jiraReadiness.fullyReady ? (
+            <p className="mt-2 text-xs text-amber-300">
+              Jira connect/sync endpoints remain disabled until all checks are ready.
+            </p>
+          ) : null}
+        </div>
+      </Card>
       <Card className="p-5">
         <h2 className="mb-2 font-medium">Asana</h2>
         <p className="mb-4 text-sm text-zinc-400">

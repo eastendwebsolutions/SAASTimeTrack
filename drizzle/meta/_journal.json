@@ -50,6 +50,13 @@
       "when": 1776903600000,
       "tag": "0006_edit_audit_trail",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1776987600000,
+      "tag": "0007_jira_safe_rollout_foundation",
+      "breakpoints": true
     }
   ]
 }

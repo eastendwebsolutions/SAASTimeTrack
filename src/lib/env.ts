@@ -8,6 +8,10 @@ const envSchema = z.object({
   ASANA_CLIENT_ID: z.string().min(1),
   ASANA_CLIENT_SECRET: z.string().min(1),
   ASANA_REDIRECT_URI: z.string().url(),
+  JIRA_CLIENT_ID: z.string().optional(),
+  JIRA_CLIENT_SECRET: z.string().optional(),
+  JIRA_REDIRECT_URI: z.string().url().optional(),
+  JIRA_FEATURE_ENABLED: z.enum(["0", "1"]).optional(),
   ENCRYPTION_KEY: z.string().min(32),
 });
 
@@ -27,6 +31,10 @@ export function getEnv(): Env {
     ASANA_CLIENT_ID: process.env.ASANA_CLIENT_ID,
     ASANA_CLIENT_SECRET: process.env.ASANA_CLIENT_SECRET,
     ASANA_REDIRECT_URI: process.env.ASANA_REDIRECT_URI,
+    JIRA_CLIENT_ID: process.env.JIRA_CLIENT_ID,
+    JIRA_CLIENT_SECRET: process.env.JIRA_CLIENT_SECRET,
+    JIRA_REDIRECT_URI: process.env.JIRA_REDIRECT_URI,
+    JIRA_FEATURE_ENABLED: process.env.JIRA_FEATURE_ENABLED,
     ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
   });
 
