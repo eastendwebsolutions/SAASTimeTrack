@@ -7,9 +7,13 @@ import { Card } from "@/components/ui/card";
 
 type UserRow = {
   id: string;
+  clerkUserId: string;
   email: string;
   role: string;
   companyId: string;
+  lastLoginAt: string | null;
+  isActiveNow: boolean;
+  isAccessRevoked: boolean;
 };
 
 type CompanyRow = {
@@ -118,8 +122,12 @@ export function SuperAdminReviewPanel({ users, companies, workspaceAdmins, proje
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Role</th>
                 <th className="px-4 py-3">Company</th>
+                <th className="px-4 py-3">Last Login</th>
+                <th className="px-4 py-3">Active</th>
+                <th className="px-4 py-3">Access</th>
                 <th className="px-4 py-3">Workspace Admin</th>
                 <th className="px-4 py-3">Poker Planning Admin</th>
+                <th className="px-4 py-3">Access Action</th>
               </tr>
             </thead>
             <tbody>
@@ -128,6 +136,17 @@ export function SuperAdminReviewPanel({ users, companies, workspaceAdmins, proje
                   <td className="px-4 py-3">{user.email}</td>
                   <td className="px-4 py-3 capitalize">{user.role}</td>
                   <td className="px-4 py-3">{companyMap.get(user.companyId) ?? user.companyId}</td>
+                  <td className="px-4 py-3">{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString("en-US") : "Never"}</td>
+                  <td className="px-4 py-3">
+                    <span className={user.isActiveNow ? "text-emerald-400" : "text-rose-400"}>
+                      {user.isActiveNow ? "Active" : "Offline"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={user.isAccessRevoked ? "text-rose-400" : "text-emerald-400"}>
+                      {user.isAccessRevoked ? "Revoked" : "Enabled"}
+                    </span>
+                  </td>
                   <td className="px-4 py-3">
                     {user.role === "super_admin" ? (
                       <span className="text-xs text-zinc-500">Super Admin</span>
@@ -141,7 +160,9 @@ export function SuperAdminReviewPanel({ users, companies, workspaceAdmins, proje
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    {companyWorkspaceMap.get(user.companyId) ? (
+                    {user.role === "super_admin" ? (
+                      <span className="text-xs text-zinc-500">Managed by Super Admin</span>
+                    ) : !user.isAccessRevoked && companyWorkspaceMap.get(user.companyId) ? (
                       (() => {
                         const workspaceId = companyWorkspaceMap.get(user.companyId)!;
                         const enabled = workspaceAdminSet.has(`${user.id}:${workspaceId}`);
@@ -156,8 +177,22 @@ export function SuperAdminReviewPanel({ users, companies, workspaceAdmins, proje
                           </form>
                         );
                       })()
-                    ) : (
+                    ) : !user.isAccessRevoked ? (
                       <span className="text-xs text-zinc-500">Workspace not synced yet</span>
+                    ) : (
+                      <span className="text-xs text-zinc-500">Access revoked</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {user.role === "super_admin" ? (
+                      <span className="text-xs text-zinc-500">Always enabled</span>
+                    ) : (
+                      <form action={`/api/admin/users/${user.id}/access`} method="post">
+                        <input type="hidden" name="enabled" value={user.isAccessRevoked ? "1" : "0"} />
+                        <Button type="submit" variant={user.isAccessRevoked ? "secondary" : "danger"}>
+                          {user.isAccessRevoked ? "Restore Access" : "Revoke Access"}
+                        </Button>
+                      </form>
                     )}
                   </td>
                 </tr>

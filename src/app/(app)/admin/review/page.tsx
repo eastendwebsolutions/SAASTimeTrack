@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { adminNotifications, entryComments, timeEntries, timesheets, users } from "@/lib/db/schema";
 import { SuperAdminReviewPanel } from "@/components/admin/super-admin-review-panel";
 import { listAuditChanges } from "@/lib/services/audit-log";
+import { getClerkAccessStatus } from "@/lib/services/clerk-admin";
 import { getWeekBounds } from "@/lib/services/week";
 
 type SearchParams = Promise<{ adminAuditPage?: string }>;
@@ -67,6 +68,21 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
     const allUsers = await db.query.users.findMany({
       orderBy: (table, { asc }) => [asc(table.email)],
     });
+    const allUserStatuses = await Promise.all(
+      allUsers.map(async (row) => {
+        try {
+          return await getClerkAccessStatus(row.clerkUserId);
+        } catch {
+          return {
+            clerkUserId: row.clerkUserId,
+            isAccessRevoked: false,
+            lastLoginAt: null,
+            isActiveNow: false,
+          };
+        }
+      }),
+    );
+    const statusByClerkUserId = new Map(allUserStatuses.map((status) => [status.clerkUserId, status]));
     const allCompanies = await db.query.companies.findMany({
       orderBy: (table, { asc }) => [asc(table.name)],
     });
@@ -113,9 +129,13 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
         <SuperAdminReviewPanel
           users={allUsers.map((row) => ({
             id: row.id,
+            clerkUserId: row.clerkUserId,
             email: row.email,
             role: row.role,
             companyId: row.companyId,
+            lastLoginAt: statusByClerkUserId.get(row.clerkUserId)?.lastLoginAt ?? null,
+            isActiveNow: statusByClerkUserId.get(row.clerkUserId)?.isActiveNow ?? false,
+            isAccessRevoked: statusByClerkUserId.get(row.clerkUserId)?.isAccessRevoked ?? false,
           }))}
           companies={allCompanies.map((row) => ({
             id: row.id,
@@ -192,6 +212,21 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
     where: eq(users.companyId, user.companyId),
     orderBy: (table, { asc }) => [asc(table.email)],
   });
+  const companyUserStatuses = await Promise.all(
+    companyUsers.map(async (row) => {
+      try {
+        return await getClerkAccessStatus(row.clerkUserId);
+      } catch {
+        return {
+          clerkUserId: row.clerkUserId,
+          isAccessRevoked: false,
+          lastLoginAt: null,
+          isActiveNow: false,
+        };
+      }
+    }),
+  );
+  const statusByClerkUserId = new Map(companyUserStatuses.map((status) => [status.clerkUserId, status]));
 
   return (
     <div className="space-y-6">
@@ -204,32 +239,68 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
               <tr>
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Role</th>
+                <th className="px-4 py-3">Last Login</th>
+                <th className="px-4 py-3">Active</th>
+                <th className="px-4 py-3">Access</th>
                 <th className="px-4 py-3">Action</th>
               </tr>
             </thead>
             <tbody>
-              {companyUsers.map((companyUser) => (
-                <tr key={companyUser.id} className="border-t border-zinc-800">
-                  <td className="px-4 py-3">{companyUser.email}</td>
-                  <td className="px-4 py-3 capitalize">{companyUser.role}</td>
-                  <td className="px-4 py-3">
-                    {companyUser.role === "super_admin" ? (
-                      <span className="text-xs text-zinc-500">Managed by Super Admin</span>
-                    ) : (
-                      <form action={`/api/admin/users/${companyUser.id}/role`} method="post">
-                        <input
-                          type="hidden"
-                          name="role"
-                          value={companyUser.role === "company_admin" ? "user" : "company_admin"}
-                        />
-                        <Button type="submit" variant={companyUser.role === "company_admin" ? "secondary" : "primary"}>
-                          {companyUser.role === "company_admin" ? "Revoke Company Admin" : "Make Company Admin"}
-                        </Button>
-                      </form>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {companyUsers.map((companyUser) => {
+                const status = statusByClerkUserId.get(companyUser.clerkUserId);
+                const isRevoked = status?.isAccessRevoked ?? false;
+                const isActiveNow = status?.isActiveNow ?? false;
+                return (
+                  <tr key={companyUser.id} className="border-t border-zinc-800">
+                    <td className="px-4 py-3">{companyUser.email}</td>
+                    <td className="px-4 py-3 capitalize">{companyUser.role}</td>
+                    <td className="px-4 py-3">
+                      {status?.lastLoginAt ? new Date(status.lastLoginAt).toLocaleString("en-US") : "Never"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={isActiveNow ? "text-emerald-400" : "text-rose-400"}>
+                        {isActiveNow ? "Active" : "Offline"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={isRevoked ? "text-rose-400" : "text-emerald-400"}>
+                        {isRevoked ? "Revoked" : "Enabled"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {companyUser.role === "super_admin" ? (
+                        <span className="text-xs text-zinc-500">Managed by Super Admin</span>
+                      ) : !isRevoked ? (
+                        <div className="flex items-center gap-2">
+                          <form action={`/api/admin/users/${companyUser.id}/role`} method="post">
+                            <input
+                              type="hidden"
+                              name="role"
+                              value={companyUser.role === "company_admin" ? "user" : "company_admin"}
+                            />
+                            <Button type="submit" variant={companyUser.role === "company_admin" ? "secondary" : "primary"}>
+                              {companyUser.role === "company_admin" ? "Revoke Company Admin" : "Make Company Admin"}
+                            </Button>
+                          </form>
+                          <form action={`/api/admin/users/${companyUser.id}/access`} method="post">
+                            <input type="hidden" name="enabled" value="0" />
+                            <Button type="submit" variant="danger">
+                              Revoke Access
+                            </Button>
+                          </form>
+                        </div>
+                      ) : (
+                        <form action={`/api/admin/users/${companyUser.id}/access`} method="post">
+                          <input type="hidden" name="enabled" value="1" />
+                          <Button type="submit" variant="secondary">
+                            Restore Access
+                          </Button>
+                        </form>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </Card>
