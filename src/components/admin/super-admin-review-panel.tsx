@@ -118,6 +118,7 @@ export function SuperAdminReviewPanel({ users, companies, workspaceAdmins, proje
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Role</th>
                 <th className="px-4 py-3">Company</th>
+                <th className="px-4 py-3">Workspace Admin</th>
                 <th className="px-4 py-3">Poker Planning Admin</th>
               </tr>
             </thead>
@@ -127,6 +128,18 @@ export function SuperAdminReviewPanel({ users, companies, workspaceAdmins, proje
                   <td className="px-4 py-3">{user.email}</td>
                   <td className="px-4 py-3 capitalize">{user.role}</td>
                   <td className="px-4 py-3">{companyMap.get(user.companyId) ?? user.companyId}</td>
+                  <td className="px-4 py-3">
+                    {user.role === "super_admin" ? (
+                      <span className="text-xs text-zinc-500">Super Admin</span>
+                    ) : (
+                      <form action={`/api/admin/users/${user.id}/role`} method="post" className="flex items-center gap-2">
+                        <input type="hidden" name="role" value={user.role === "company_admin" ? "user" : "company_admin"} />
+                        <Button type="submit" variant={user.role === "company_admin" ? "secondary" : "primary"}>
+                          {user.role === "company_admin" ? "Revoke Company Admin" : "Make Company Admin"}
+                        </Button>
+                      </form>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     {companyWorkspaceMap.get(user.companyId) ? (
                       (() => {

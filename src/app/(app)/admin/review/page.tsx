@@ -1,4 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
+import { AuditTrailTable } from "@/components/audit/audit-trail-table";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { canReviewEntries, isSuperAdmin } from "@/lib/auth/rbac";
@@ -6,13 +7,24 @@ import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
 import { adminNotifications, entryComments, timeEntries, timesheets, users } from "@/lib/db/schema";
 import { SuperAdminReviewPanel } from "@/components/admin/super-admin-review-panel";
+import { listAuditChanges } from "@/lib/services/audit-log";
 import { getWeekBounds } from "@/lib/services/week";
 
-export default async function AdminReviewPage() {
+type SearchParams = Promise<{ adminAuditPage?: string }>;
+
+export default async function AdminReviewPage({ searchParams }: { searchParams: SearchParams }) {
   const user = await getOrCreateCurrentUser();
   if (!user || !canReviewEntries(user.role)) {
     return <p className="text-zinc-400">Admin access required.</p>;
   }
+  const params = await searchParams;
+  const adminAuditPage = Math.max(1, Number(params.adminAuditPage ?? "1") || 1);
+  const audit = await listAuditChanges({
+    companyId: user.companyId,
+    pageKey: "admin_review",
+    page: adminAuditPage,
+    pageSize: 10,
+  });
 
   const entries = await db.query.timeEntries.findMany({
     where: isSuperAdmin(user.role)
@@ -97,51 +109,60 @@ export default async function AdminReviewPage() {
     const reviewSheets = [...submittedSheets, ...draftSheets];
 
     return (
-      <SuperAdminReviewPanel
-        users={allUsers.map((row) => ({
-          id: row.id,
-          email: row.email,
-          role: row.role,
-          companyId: row.companyId,
-        }))}
-        companies={allCompanies.map((row) => ({
-          id: row.id,
-          name: row.name,
-          asanaWorkspaceId: row.asanaWorkspaceId,
-        }))}
-        workspaceAdmins={allWorkspaceAdmins.map((row) => ({
-          userId: row.userId,
-          asanaWorkspaceId: row.asanaWorkspaceId,
-        }))}
-        projects={allProjects.map((row) => ({
-          id: row.id,
-          name: row.name,
-        }))}
-        entries={sheetEntries.map((row) => {
-          const draftKey = row.timesheetId
-            ? null
-            : `draft:${row.userId}:${getWeekBounds(new Date(row.entryDate)).start.toISOString()}`;
-          return {
+      <div className="space-y-6">
+        <SuperAdminReviewPanel
+          users={allUsers.map((row) => ({
             id: row.id,
-            timesheetId: row.timesheetId ?? draftKey,
-            projectId: row.projectId,
-            summary: row.summary,
-            timeIn: row.timeIn.toISOString(),
-            timeOut: row.timeOut.toISOString(),
-            durationMinutes: row.durationMinutes,
+            email: row.email,
+            role: row.role,
+            companyId: row.companyId,
+          }))}
+          companies={allCompanies.map((row) => ({
+            id: row.id,
+            name: row.name,
+            asanaWorkspaceId: row.asanaWorkspaceId,
+          }))}
+          workspaceAdmins={allWorkspaceAdmins.map((row) => ({
+            userId: row.userId,
+            asanaWorkspaceId: row.asanaWorkspaceId,
+          }))}
+          projects={allProjects.map((row) => ({
+            id: row.id,
+            name: row.name,
+          }))}
+          entries={sheetEntries.map((row) => {
+            const draftKey = row.timesheetId
+              ? null
+              : `draft:${row.userId}:${getWeekBounds(new Date(row.entryDate)).start.toISOString()}`;
+            return {
+              id: row.id,
+              timesheetId: row.timesheetId ?? draftKey,
+              projectId: row.projectId,
+              summary: row.summary,
+              timeIn: row.timeIn.toISOString(),
+              timeOut: row.timeOut.toISOString(),
+              durationMinutes: row.durationMinutes,
+              status: row.status,
+            };
+          })}
+          submittedSheets={reviewSheets.map((row) => ({
+            id: row.id,
+            companyId: row.companyId,
+            userId: row.userId,
             status: row.status,
-          };
-        })}
-        submittedSheets={reviewSheets.map((row) => ({
-          id: row.id,
-          companyId: row.companyId,
-          userId: row.userId,
-          status: row.status,
-          weekStart: row.weekStart.toISOString(),
-          submittedAt: row.submittedAt?.toISOString() ?? null,
-          submittedFromIp: row.submittedFromIp ?? null,
-        }))}
-      />
+            weekStart: row.weekStart.toISOString(),
+            submittedAt: row.submittedAt?.toISOString() ?? null,
+            submittedFromIp: row.submittedFromIp ?? null,
+          }))}
+        />
+        <AuditTrailTable
+          rows={audit.rows}
+          page={audit.page}
+          totalPages={audit.totalPages}
+          pageParam="adminAuditPage"
+          basePath="/admin/review"
+        />
+      </div>
     );
   }
 
@@ -167,10 +188,52 @@ export default async function AdminReviewPage() {
     submittedFromIp: null,
   }));
   const reviewSheets = [...submittedSheets, ...companyDraftSheets];
+  const companyUsers = await db.query.users.findMany({
+    where: eq(users.companyId, user.companyId),
+    orderBy: (table, { asc }) => [asc(table.email)],
+  });
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Admin Review</h1>
+      <div className="space-y-3">
+        <h2 className="text-lg font-medium">Workspace Users</h2>
+        <Card className="overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-zinc-900/80 text-left text-zinc-400">
+              <tr>
+                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">Role</th>
+                <th className="px-4 py-3">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {companyUsers.map((companyUser) => (
+                <tr key={companyUser.id} className="border-t border-zinc-800">
+                  <td className="px-4 py-3">{companyUser.email}</td>
+                  <td className="px-4 py-3 capitalize">{companyUser.role}</td>
+                  <td className="px-4 py-3">
+                    {companyUser.role === "super_admin" ? (
+                      <span className="text-xs text-zinc-500">Managed by Super Admin</span>
+                    ) : (
+                      <form action={`/api/admin/users/${companyUser.id}/role`} method="post">
+                        <input
+                          type="hidden"
+                          name="role"
+                          value={companyUser.role === "company_admin" ? "user" : "company_admin"}
+                        />
+                        <Button type="submit" variant={companyUser.role === "company_admin" ? "secondary" : "primary"}>
+                          {companyUser.role === "company_admin" ? "Revoke Company Admin" : "Make Company Admin"}
+                        </Button>
+                      </form>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      </div>
       <div className="space-y-3">
         <h2 className="text-lg font-medium">Notifications</h2>
         {notifications.length === 0 ? <p className="text-sm text-zinc-500">No notifications.</p> : null}
@@ -252,6 +315,13 @@ export default async function AdminReviewPage() {
           </Card>
         ))}
       </div>
+      <AuditTrailTable
+        rows={audit.rows}
+        page={audit.page}
+        totalPages={audit.totalPages}
+        pageParam="adminAuditPage"
+        basePath="/admin/review"
+      />
     </div>
   );
 }
