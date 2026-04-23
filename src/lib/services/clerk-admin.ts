@@ -7,6 +7,12 @@ type ClerkUserPayload = {
   last_active_at?: number | null;
 };
 
+type ClerkSessionPayload = {
+  id: string;
+  status?: string | null;
+  last_active_at?: number | null;
+};
+
 export type ClerkAccessStatus = {
   clerkUserId: string;
   isAccessRevoked: boolean;
@@ -15,6 +21,7 @@ export type ClerkAccessStatus = {
 };
 
 const ACTIVE_WINDOW_MS = 15 * 60 * 1000;
+const SESSION_ACTIVE_WINDOW_MS = 10 * 60 * 1000;
 
 function normalizeEpochMs(value: number | null | undefined) {
   if (!value) return null;
@@ -43,13 +50,25 @@ async function clerkApi<T>(path: string, init: RequestInit = {}) {
 
 export async function getClerkAccessStatus(clerkUserId: string): Promise<ClerkAccessStatus> {
   const payload = await clerkApi<ClerkUserPayload>(`/users/${clerkUserId}`);
+  let sessions: ClerkSessionPayload[] = [];
+  try {
+    sessions = await clerkApi<ClerkSessionPayload[]>(`/users/${clerkUserId}/sessions`);
+  } catch {
+    sessions = [];
+  }
+
   const lastActiveAt = normalizeEpochMs(payload.last_active_at);
   const lastLoginAt = normalizeEpochMs(payload.last_sign_in_at);
+  const hasActiveSession = sessions.some((session) => {
+    if (session.status === "active") return true;
+    const sessionLastActive = normalizeEpochMs(session.last_active_at);
+    return Boolean(sessionLastActive && Date.now() - sessionLastActive <= SESSION_ACTIVE_WINDOW_MS);
+  });
   return {
     clerkUserId,
     isAccessRevoked: Boolean(payload.banned),
     lastLoginAt: lastLoginAt ? new Date(lastLoginAt).toISOString() : null,
-    isActiveNow: Boolean(lastActiveAt && Date.now() - lastActiveAt <= ACTIVE_WINDOW_MS && !payload.banned),
+    isActiveNow: Boolean(!payload.banned && (hasActiveSession || (lastActiveAt && Date.now() - lastActiveAt <= ACTIVE_WINDOW_MS))),
   };
 }
 
