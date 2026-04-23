@@ -133,7 +133,13 @@ export async function updateCompanyPokerAsanaMapping(args: {
   storyPointsFieldGid: string;
   storyPointsFieldName: string;
 }) {
-  const actor = await db.query.users.findFirst({ where: eq(users.id, args.actorUserId) });
+  const actor = await db.query.users.findFirst({
+    where: eq(users.id, args.actorUserId),
+    columns: {
+      id: true,
+      companyId: true,
+    },
+  });
   if (!actor || actor.companyId !== args.companyId) {
     throw new Error("Forbidden");
   }

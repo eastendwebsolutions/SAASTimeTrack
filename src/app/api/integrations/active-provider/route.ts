@@ -4,6 +4,7 @@ import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
 import { asanaConnections, jiraConnections, mondayConnections, users } from "@/lib/db/schema";
 import { isIntegrationProvider } from "@/lib/integrations/provider";
+import { isMissingIntegrationSchemaError } from "@/lib/integrations/schema-compat";
 
 async function hasConnection(userId: string, provider: "asana" | "jira" | "monday") {
   if (provider === "asana") {
@@ -23,7 +24,10 @@ async function setActiveProviderForCurrentUser(userId: string, provider: "asana"
   await db
     .update(users)
     .set({ activeIntegrationProvider: provider })
-    .where(eq(users.id, userId));
+    .where(eq(users.id, userId))
+    .catch((error) => {
+      if (!isMissingIntegrationSchemaError(error)) throw error;
+    });
 
   return { ok: true as const };
 }

@@ -56,6 +56,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const adminUsers = await db.query.users.findMany({
     where: and(eq(users.companyId, user.companyId), inArray(users.role, ["company_admin", "super_admin"])),
+    columns: { id: true },
   });
   if (adminUsers.length) {
     await db.insert(adminNotifications).values(

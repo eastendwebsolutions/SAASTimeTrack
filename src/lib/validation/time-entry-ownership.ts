@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { projects, tasks, users } from "@/lib/db/schema";
+import { projects, tasks } from "@/lib/db/schema";
+import { getActiveProviderForUser } from "@/lib/integrations/provider";
 
 /** Ensures project/task/subtask rows belong to the time entry owner (per-user Asana cache). */
 export async function assertProjectTaskOwnedByUser(params: {
@@ -10,19 +11,13 @@ export async function assertProjectTaskOwnedByUser(params: {
   subtaskId: string | null | undefined;
 }) {
   const { ownerUserId, projectId, taskId, subtaskId } = params;
-  const ownerUser = await db.query.users.findFirst({
-    where: eq(users.id, ownerUserId),
-    columns: { activeIntegrationProvider: true },
-  });
-  if (!ownerUser) {
-    throw new Error("Owner user not found");
-  }
+  const ownerProvider = await getActiveProviderForUser(ownerUserId);
 
   const project = await db.query.projects.findFirst({
     where: and(
       eq(projects.id, projectId),
       eq(projects.syncedByUserId, ownerUserId),
-      eq(projects.provider, ownerUser.activeIntegrationProvider),
+      eq(projects.provider, ownerProvider),
       eq(projects.isActive, true),
     ),
   });

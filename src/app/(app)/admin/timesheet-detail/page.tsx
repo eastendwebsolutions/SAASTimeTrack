@@ -8,6 +8,7 @@ import { projects, tasks, timeEntries, users } from "@/lib/db/schema";
 import { listAuditChanges } from "@/lib/services/audit-log";
 import { getWeekBounds } from "@/lib/services/week";
 import { TimesheetDetailEditor } from "@/components/admin/timesheet-detail-editor";
+import { getActiveProviderForUser } from "@/lib/integrations/provider";
 
 type SearchParams = Promise<{ userId?: string; weekStart?: string; auditPage?: string }>;
 
@@ -30,7 +31,15 @@ export default async function AdminTimesheetDetailPage({ searchParams }: { searc
     return <p className="text-zinc-400">Missing user/week parameters.</p>;
   }
 
-  const targetUser = await db.query.users.findFirst({ where: eq(users.id, targetUserId) });
+  const targetUser = await db.query.users.findFirst({
+    where: eq(users.id, targetUserId),
+    columns: {
+      id: true,
+      email: true,
+      companyId: true,
+      timezone: true,
+    },
+  });
   if (!targetUser) {
     return <p className="text-zinc-400">User not found.</p>;
   }
@@ -52,11 +61,13 @@ export default async function AdminTimesheetDetailPage({ searchParams }: { searc
   }
   const entryTaskIdList = [...entryTaskIds];
 
+  const targetProvider = await getActiveProviderForUser(targetUserId);
+
   const companyProjects = await db.query.projects.findMany({
     where: and(
       eq(projects.companyId, targetUser.companyId),
       eq(projects.syncedByUserId, targetUserId),
-      eq(projects.provider, targetUser.activeIntegrationProvider),
+      eq(projects.provider, targetProvider),
       entryProjectIds.length > 0
         ? or(eq(projects.isActive, true), inArray(projects.id, entryProjectIds))
         : eq(projects.isActive, true),

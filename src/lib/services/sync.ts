@@ -185,7 +185,7 @@ async function fetchProjectByGidWithAuth(projectGid: string, authFetch: <T>(path
  * Tasks/subtasks: in those projects, kept only if assignee is this Asana user (API does not allow project + assignee=me).
  */
 export async function syncUserAsanaData(userId: string, type: "initial" | "periodic" | "manual" = "manual") {
-  const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId), columns: { id: true, companyId: true } });
   if (!user) {
     throw new Error("User not found");
   }
@@ -559,7 +559,7 @@ function isJiraUnauthorized(error: unknown) {
 }
 
 export async function syncUserJiraData(userId: string, type: "initial" | "periodic" | "manual" = "manual") {
-  const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId), columns: { id: true, companyId: true } });
   if (!user) {
     throw new Error("User not found");
   }
@@ -786,7 +786,7 @@ type MondayItemsByBoardResponse = {
 };
 
 export async function syncUserMondayData(userId: string, type: "initial" | "periodic" | "manual" = "manual") {
-  const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId), columns: { id: true, companyId: true } });
   if (!user) {
     throw new Error("User not found");
   }

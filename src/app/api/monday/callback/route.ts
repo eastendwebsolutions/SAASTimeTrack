@@ -6,6 +6,7 @@ import { mondayConnections, users } from "@/lib/db/schema";
 import { getMondayReadiness } from "@/lib/integrations/monday-readiness";
 import { exchangeMondayCode, fetchMondayMe } from "@/lib/monday/client";
 import { encrypt } from "@/lib/utils/crypto";
+import { isMissingIntegrationSchemaError } from "@/lib/integrations/schema-compat";
 
 function integrationsUrl(request: NextRequest, query: Record<string, string>) {
   const url = new URL("/settings/integrations", request.url);
@@ -77,10 +78,14 @@ export async function GET(request: NextRequest) {
         },
       });
 
-    await db
-      .update(users)
-      .set({ activeIntegrationProvider: "monday" })
-      .where(eq(users.id, parsed.userId));
+    try {
+      await db
+        .update(users)
+        .set({ activeIntegrationProvider: "monday" })
+        .where(eq(users.id, parsed.userId));
+    } catch (error) {
+      if (!isMissingIntegrationSchemaError(error)) throw error;
+    }
   } catch {
     return NextResponse.redirect(integrationsUrl(request, { monday_error: "exchange_failed" }));
   }

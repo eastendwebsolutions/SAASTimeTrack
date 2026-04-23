@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { asanaConnections, users } from "@/lib/db/schema";
 import { encrypt } from "@/lib/utils/crypto";
 import { eq } from "drizzle-orm";
+import { isMissingIntegrationSchemaError } from "@/lib/integrations/schema-compat";
 
 function integrationsUrl(request: NextRequest, query: Record<string, string>) {
   const url = new URL("/settings/integrations", request.url);
@@ -73,10 +74,14 @@ export async function GET(request: NextRequest) {
           expiresAt,
         },
       });
-    await db
-      .update(users)
-      .set({ activeIntegrationProvider: "asana" })
-      .where(eq(users.id, parsed.userId));
+    try {
+      await db
+        .update(users)
+        .set({ activeIntegrationProvider: "asana" })
+        .where(eq(users.id, parsed.userId));
+    } catch (error) {
+      if (!isMissingIntegrationSchemaError(error)) throw error;
+    }
   } catch {
     return NextResponse.redirect(integrationsUrl(request, { asana_error: "save_failed" }));
   }

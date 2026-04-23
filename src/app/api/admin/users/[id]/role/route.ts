@@ -19,7 +19,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   const { id } = await params;
-  const target = await db.query.users.findFirst({ where: eq(users.id, id) });
+  const target = await db.query.users.findFirst({
+    where: eq(users.id, id),
+    columns: {
+      id: true,
+      companyId: true,
+      role: true,
+    },
+  });
   if (!target) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }

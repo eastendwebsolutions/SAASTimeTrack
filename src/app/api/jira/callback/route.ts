@@ -6,6 +6,7 @@ import { getJiraReadiness } from "@/lib/integrations/jira-readiness";
 import { exchangeJiraCode, fetchJiraAccessibleResources, fetchJiraMe } from "@/lib/jira/client";
 import { encrypt } from "@/lib/utils/crypto";
 import { eq } from "drizzle-orm";
+import { isMissingIntegrationSchemaError } from "@/lib/integrations/schema-compat";
 
 function integrationsUrl(request: NextRequest, query: Record<string, string>) {
   const url = new URL("/settings/integrations", request.url);
@@ -82,10 +83,14 @@ export async function GET(request: NextRequest) {
           scopes: tokenData.scope ?? null,
         },
       });
-    await db
-      .update(users)
-      .set({ activeIntegrationProvider: "jira" })
-      .where(eq(users.id, parsed.userId));
+    try {
+      await db
+        .update(users)
+        .set({ activeIntegrationProvider: "jira" })
+        .where(eq(users.id, parsed.userId));
+    } catch (error) {
+      if (!isMissingIntegrationSchemaError(error)) throw error;
+    }
   } catch {
     return NextResponse.redirect(integrationsUrl(request, { jira_error: "exchange_failed" }));
   }

@@ -25,8 +25,8 @@ export default async function TimesheetArchivePage() {
   const ownerIds = [...new Set(archivedSheets.map((sheet) => sheet.userId))];
   const owners = ownerIds.length
     ? isSuperAdmin(user.role)
-      ? await db.query.users.findMany()
-      : await db.query.users.findMany({ where: eq(users.companyId, user.companyId) })
+      ? await db.query.users.findMany({ columns: { id: true, email: true } })
+      : await db.query.users.findMany({ where: eq(users.companyId, user.companyId), columns: { id: true, email: true } })
     : [];
   const ownerMap = new Map(owners.map((owner) => [owner.id, owner.email]));
 

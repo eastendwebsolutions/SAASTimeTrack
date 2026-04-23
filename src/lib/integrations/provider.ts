@@ -1,24 +1,13 @@
 import { db } from "@/lib/db";
 import { asanaConnections, jiraConnections, mondayConnections, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { isMissingIntegrationSchemaError } from "@/lib/integrations/schema-compat";
 
 export const INTEGRATION_PROVIDERS = ["asana", "jira", "monday"] as const;
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
 
 export function isIntegrationProvider(value: string): value is IntegrationProvider {
   return INTEGRATION_PROVIDERS.includes(value as IntegrationProvider);
-}
-
-function isMissingSchemaError(error: unknown) {
-  if (!(error instanceof Error)) return false;
-  const message = error.message.toLowerCase();
-  return (
-    message.includes("does not exist") ||
-    message.includes("column") ||
-    message.includes("relation") ||
-    message.includes("42703") ||
-    message.includes("42p01")
-  );
 }
 
 async function hasAsanaConnection(userId: string) {
@@ -59,7 +48,7 @@ export async function getActiveProviderForUser(userId: string): Promise<Integrat
     });
     preferred = user?.activeIntegrationProvider ?? null;
   } catch (error) {
-    if (!isMissingSchemaError(error)) throw error;
+    if (!isMissingIntegrationSchemaError(error)) throw error;
   }
 
   if (preferred === "jira") {

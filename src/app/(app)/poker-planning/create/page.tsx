@@ -16,6 +16,11 @@ export default async function PokerPlanningCreatePage() {
 
   const companyUsers = await db.query.users.findMany({
     where: eq(users.companyId, user.companyId),
+    columns: {
+      id: true,
+      email: true,
+      role: true,
+    },
     orderBy: (table) => [asc(table.email)],
   });
   const mapping = await getCompanyPokerAsanaMapping(user.companyId);

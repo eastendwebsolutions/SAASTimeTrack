@@ -46,6 +46,7 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
   const authors = authorIds.length
     ? await db.query.users.findMany({
         where: inArray(users.id, authorIds),
+        columns: { id: true, email: true },
       })
     : [];
   const authorMap = new Map(authors.map((author) => [author.id, author.email]));
@@ -66,6 +67,13 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
 
   if (isSuperAdmin(user.role)) {
     const allUsers = await db.query.users.findMany({
+      columns: {
+        id: true,
+        clerkUserId: true,
+        email: true,
+        role: true,
+        companyId: true,
+      },
       orderBy: (table, { asc }) => [asc(table.email)],
     });
     const allUserStatuses = await Promise.all(
@@ -223,6 +231,13 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
       : [user.companyId];
   const companyUsers = await db.query.users.findMany({
     where: inArray(users.companyId, workspaceCompanyIds),
+    columns: {
+      id: true,
+      clerkUserId: true,
+      email: true,
+      role: true,
+      companyId: true,
+    },
     orderBy: (table, { asc }) => [asc(table.email)],
   });
   const companyUserStatuses = await Promise.all(

@@ -2,6 +2,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { companies, companySettings, users } from "@/lib/db/schema";
+import { isMissingIntegrationSchemaError } from "@/lib/integrations/schema-compat";
 
 const SUPER_ADMIN_EMAILS = new Set(["bryan@eastendwebsolutions.com"]);
 
@@ -11,9 +12,32 @@ export async function getOrCreateCurrentUser() {
     return null;
   }
 
-  const existing = await db.query.users.findFirst({
-    where: eq(users.clerkUserId, userId)
-  });
+  const existing = await (async () => {
+    try {
+      return await db.query.users.findFirst({
+        where: eq(users.clerkUserId, userId),
+      });
+    } catch (error) {
+      if (!isMissingIntegrationSchemaError(error)) throw error;
+      const fallback = await db.query.users.findFirst({
+        where: eq(users.clerkUserId, userId),
+        columns: {
+          id: true,
+          clerkUserId: true,
+          email: true,
+          asanaUserId: true,
+          role: true,
+          isPokerPlanningAdmin: true,
+          companyId: true,
+          timezone: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+      if (!fallback) return null;
+      return { ...fallback, activeIntegrationProvider: "asana" as const };
+    }
+  })();
 
   if (existing) {
     const shouldBeSuperAdmin = SUPER_ADMIN_EMAILS.has(existing.email.toLowerCase());
@@ -54,9 +78,31 @@ export async function getOrCreateCurrentUser() {
 
   if (!created) {
     // Another request already created this user; reuse the existing record.
-    const conflicted = await db.query.users.findFirst({
-      where: eq(users.clerkUserId, userId),
-    });
+    const conflicted = await (async () => {
+      try {
+        return await db.query.users.findFirst({
+          where: eq(users.clerkUserId, userId),
+        });
+      } catch (error) {
+        if (!isMissingIntegrationSchemaError(error)) throw error;
+        const fallback = await db.query.users.findFirst({
+          where: eq(users.clerkUserId, userId),
+          columns: {
+            id: true,
+            clerkUserId: true,
+            email: true,
+            asanaUserId: true,
+            role: true,
+            isPokerPlanningAdmin: true,
+            companyId: true,
+            timezone: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        });
+        return fallback ? { ...fallback, activeIntegrationProvider: "asana" as const } : null;
+      }
+    })();
     if (!conflicted) {
       return null;
     }
@@ -74,7 +120,27 @@ export async function getOrCreateCurrentUser() {
     return conflicted;
   }
 
-  return db.query.users.findFirst({
-    where: and(eq(users.id, created.id), eq(users.companyId, insertedCompany[0].id))
-  });
+  try {
+    return await db.query.users.findFirst({
+      where: and(eq(users.id, created.id), eq(users.companyId, insertedCompany[0].id)),
+    });
+  } catch (error) {
+    if (!isMissingIntegrationSchemaError(error)) throw error;
+    const fallback = await db.query.users.findFirst({
+      where: and(eq(users.id, created.id), eq(users.companyId, insertedCompany[0].id)),
+      columns: {
+        id: true,
+        clerkUserId: true,
+        email: true,
+        asanaUserId: true,
+        role: true,
+        isPokerPlanningAdmin: true,
+        companyId: true,
+        timezone: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    return fallback ? { ...fallback, activeIntegrationProvider: "asana" as const } : null;
+  }
 }
