@@ -16,6 +16,12 @@ export type ClerkAccessStatus = {
 
 const ACTIVE_WINDOW_MS = 15 * 60 * 1000;
 
+function normalizeEpochMs(value: number | null | undefined) {
+  if (!value) return null;
+  // Clerk fields may arrive as epoch seconds or milliseconds depending on API shape/version.
+  return value < 1_000_000_000_000 ? value * 1000 : value;
+}
+
 async function clerkApi<T>(path: string, init: RequestInit = {}) {
   const response = await fetch(`https://api.clerk.com/v1${path}`, {
     ...init,
@@ -37,8 +43,8 @@ async function clerkApi<T>(path: string, init: RequestInit = {}) {
 
 export async function getClerkAccessStatus(clerkUserId: string): Promise<ClerkAccessStatus> {
   const payload = await clerkApi<ClerkUserPayload>(`/users/${clerkUserId}`);
-  const lastActiveAt = payload.last_active_at ?? null;
-  const lastLoginAt = payload.last_sign_in_at ?? null;
+  const lastActiveAt = normalizeEpochMs(payload.last_active_at);
+  const lastLoginAt = normalizeEpochMs(payload.last_sign_in_at);
   return {
     clerkUserId,
     isAccessRevoked: Boolean(payload.banned),
