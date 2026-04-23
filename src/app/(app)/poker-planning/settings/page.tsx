@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AuditTrailTable } from "@/components/audit/audit-trail-table";
 import { PokerAsanaMappingForm } from "@/components/poker-planning/poker-asana-mapping-form";
+import { IntegrationLabel } from "@/components/integrations/integration-label";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { listAuditChanges } from "@/lib/services/audit-log";
 import { getCompanyPokerAsanaMapping } from "@/lib/services/poker-planning/asana";
@@ -25,7 +26,9 @@ export default async function PokerPlanningSettingsPage({ searchParams }: { sear
   });
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Poker Planning Asana Mapping</h1>
+      <h1 className="text-2xl font-semibold">
+        Poker Planning <IntegrationLabel integration="asana" text="Asana Mapping" />
+      </h1>
       <PokerAsanaMappingForm mapping={mapping} />
       <AuditTrailTable
         rows={audit.rows}

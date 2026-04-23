@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { IntegrationLabel } from "@/components/integrations/integration-label";
 
 const SYNC_REMINDER_INTERVAL_MS = 8 * 60 * 60 * 1000;
 
@@ -110,7 +111,13 @@ export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, lastSyncedAtI
   return (
     <>
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-300">
-        <p className="font-medium text-zinc-100">Asana: {asanaConnected ? "Connected" : "Not Connected"}</p>
+        <p className="font-medium text-zinc-100">
+          <IntegrationLabel
+            integration="asana"
+            text={`Asana: ${asanaConnected ? "Connected" : "Not Connected"}`}
+            className="inline-flex items-center gap-1.5"
+          />
+        </p>
         <p>Last sync: {lastSyncLabel}</p>
         <p>Timezone: {timezone}</p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -122,14 +129,14 @@ export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, lastSyncedAtI
               disabled={isSyncing}
               onClick={() => void syncNow()}
             >
-              {isSyncing ? "Syncing…" : "Sync Asana"}
+              <IntegrationLabel integration="asana" text={isSyncing ? "Syncing..." : "Sync Asana"} />
             </Button>
           ) : (
             <Link
               href="/settings/integrations"
               className="inline-flex rounded-md bg-zinc-800 px-2 py-1 text-xs font-medium text-zinc-100 transition hover:bg-zinc-700"
             >
-              Connect Asana
+              <IntegrationLabel integration="asana" text="Connect Asana" />
             </Link>
           )}
         </div>
@@ -138,7 +145,9 @@ export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, lastSyncedAtI
       {showReminder ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
           <div className="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
-            <h2 className="text-lg font-semibold text-zinc-100">Asana sync reminder</h2>
+            <h2 className="text-lg font-semibold text-zinc-100">
+              <IntegrationLabel integration="asana" text="Asana sync reminder" />
+            </h2>
             <p className="mt-2 text-sm text-zinc-300">
               Your Asana data has not been synced in over 8 hours. Sync now to keep project and task options current.
             </p>
@@ -147,7 +156,7 @@ export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, lastSyncedAtI
                 Later
               </Button>
               <Button type="button" disabled={isSyncing} onClick={() => void syncFromReminder()}>
-                {isSyncing ? "Syncing…" : "Sync Asana now"}
+                <IntegrationLabel integration="asana" text={isSyncing ? "Syncing..." : "Sync Asana now"} />
               </Button>
             </div>
           </div>

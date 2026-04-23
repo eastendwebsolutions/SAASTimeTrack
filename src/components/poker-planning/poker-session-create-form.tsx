@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { IntegrationLabel } from "@/components/integrations/integration-label";
 
 type CompanyUser = {
   id: string;
@@ -126,7 +127,9 @@ export function PokerSessionCreateForm({ users, mapping }: { users: CompanyUser[
         </label>
 
         <label className="block text-sm">
-          <span className="mb-1 block text-zinc-300">Detected Asana workspace</span>
+          <span className="mb-1 block text-zinc-300">
+            <IntegrationLabel integration="asana" text="Detected Asana workspace" />
+          </span>
           <input
             value={asanaWorkspaceId}
             onChange={(event) => setAsanaWorkspaceId(event.target.value)}
@@ -136,7 +139,9 @@ export function PokerSessionCreateForm({ users, mapping }: { users: CompanyUser[
         </label>
 
         <label className="block text-sm">
-          <span className="mb-1 block text-zinc-300">Asana project GID</span>
+          <span className="mb-1 block text-zinc-300">
+            <IntegrationLabel integration="asana" text="Asana project GID" />
+          </span>
           <input
             value={asanaProjectId}
             onChange={(event) => setAsanaProjectId(event.target.value)}
@@ -151,7 +156,7 @@ export function PokerSessionCreateForm({ users, mapping }: { users: CompanyUser[
           </span>
         </label>
 
-        {detecting ? <p className="text-xs text-zinc-400">Detecting Asana custom fields...</p> : null}
+        {detecting ? <p className="text-xs text-zinc-400"><IntegrationLabel integration="asana" text="Detecting Asana custom fields..." /></p> : null}
         {!needsManualMapping && sprintFieldGid ? (
           <p className="rounded-md border border-emerald-900/60 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-200">
             Auto-detected mapping: Sprint `{sprintFieldName}` and Story Points `{storyPointsFieldName}`.
@@ -209,7 +214,7 @@ export function PokerSessionCreateForm({ users, mapping }: { users: CompanyUser[
           <p className="rounded-md border border-amber-900/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
             Auto-detection is incomplete or ambiguous. Update mapping below or in{" "}
             <Link className="underline" href="/poker-planning/settings">
-              Asana Mapping
+              <IntegrationLabel integration="asana" text="Asana Mapping" />
             </Link>
             .
           </p>

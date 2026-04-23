@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AsanaSyncPanel } from "@/components/integrations/asana-sync-panel";
 import { getJiraReadiness } from "@/lib/integrations/jira-readiness";
+import { IntegrationLabel } from "@/components/integrations/integration-label";
 
 const ASANA_ERROR_MESSAGES: Record<string, string> = {
   missing_params: "Asana did not return a complete authorization response. Use Connect Asana again.",
@@ -100,13 +101,17 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
       <h1 className="text-2xl font-semibold">Integrations</h1>
       {asanaErrorMessage ? (
         <Card className="border border-rose-900/80 bg-rose-950/40 p-4 text-sm text-rose-100">
-          <p className="font-medium text-rose-50">Asana connect did not finish</p>
+          <p className="font-medium text-rose-50">
+            <IntegrationLabel integration="asana" text="Asana connect did not finish" />
+          </p>
           <p className="mt-2 text-rose-200/90">{asanaErrorMessage}</p>
         </Card>
       ) : null}
       {showAsanaConfigHelp ? (
         <Card className="border border-amber-800/80 bg-amber-950/40 p-4 text-sm text-amber-100">
-          <p className="font-medium text-amber-50">Asana OAuth is not configured on the server</p>
+          <p className="font-medium text-amber-50">
+            <IntegrationLabel integration="asana" text="Asana OAuth is not configured on the server" />
+          </p>
           <p className="mt-2 text-amber-200/90">
             In Vercel → your project → <strong>Settings → Environment Variables</strong> (Production), add:
           </p>
@@ -134,13 +139,17 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
       ) : null}
       {jiraErrorMessage ? (
         <Card className="border border-rose-900/80 bg-rose-950/40 p-4 text-sm text-rose-100">
-          <p className="font-medium text-rose-50">Jira connect did not finish</p>
+          <p className="font-medium text-rose-50">
+            <IntegrationLabel integration="jira" text="Jira connect did not finish" />
+          </p>
           <p className="mt-2 text-rose-200/90">{jiraErrorMessage}</p>
         </Card>
       ) : null}
       {showJiraConfigHelp ? (
         <Card className="border border-amber-800/80 bg-amber-950/40 p-4 text-sm text-amber-100">
-          <p className="font-medium text-amber-50">Jira rollout prerequisites are not complete</p>
+          <p className="font-medium text-amber-50">
+            <IntegrationLabel integration="jira" text="Jira rollout prerequisites are not complete" />
+          </p>
           {missingKeys.length > 0 ? (
             <p className="mt-2 text-xs text-amber-300/90">Missing or invalid: {missingKeys.join(", ")}</p>
           ) : null}
@@ -148,7 +157,9 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
         </Card>
       ) : null}
       <Card className="p-5">
-        <h2 className="mb-2 font-medium">Asana</h2>
+        <h2 className="mb-2 font-medium">
+          <IntegrationLabel integration="asana" text="Asana" />
+        </h2>
         <p className="mb-4 text-sm text-zinc-400">
           {connection ? "Connected" : "Not connected"}. Each user connects their own Asana account—no workspace-wide app install.
           Sync pulls projects you can access and tasks assigned to you, stored for your account only.
@@ -191,7 +202,9 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
           </div>
         ) : null}
         <a href="/api/asana/connect/url">
-          <Button>{connection ? "Reconnect Asana" : "Connect Asana"}</Button>
+          <Button>
+            <IntegrationLabel integration="asana" text={connection ? "Reconnect Asana" : "Connect Asana"} />
+          </Button>
         </a>
         <AsanaSyncPanel
           connected={Boolean(connection)}
@@ -212,7 +225,9 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
         />
       </Card>
       <Card className="p-5">
-        <h2 className="mb-2 font-medium">Jira (Safe Rollout)</h2>
+        <h2 className="mb-2 font-medium">
+          <IntegrationLabel integration="jira" text="Jira (Safe Rollout)" />
+        </h2>
         <p className="mb-4 text-sm text-zinc-400">
           Jira is being reintroduced with outage-safe gating. It will only activate after database migration and feature flag checks pass.
         </p>
@@ -247,11 +262,13 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
           <div className="mt-3">
             {jiraReadiness.fullyReady ? (
               <a href="/api/jira/connect/url">
-                <Button variant="secondary">{jiraConnection ? "Reconnect Jira" : "Connect Jira"}</Button>
+                <Button variant="secondary">
+                  <IntegrationLabel integration="jira" text={jiraConnection ? "Reconnect Jira" : "Connect Jira"} />
+                </Button>
               </a>
             ) : (
               <Button variant="secondary" disabled>
-                Connect Jira (locked until ready)
+                <IntegrationLabel integration="jira" text="Connect Jira (locked until ready)" />
               </Button>
             )}
           </div>

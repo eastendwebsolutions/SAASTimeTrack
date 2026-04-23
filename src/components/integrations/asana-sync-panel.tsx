@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { IntegrationLabel } from "@/components/integrations/integration-label";
 
 type SyncRun = {
   status: string;
@@ -150,7 +151,10 @@ export function AsanaSyncPanel({
 
       {connected ? (
         <Button type="button" variant="secondary" onClick={syncNow} disabled={isSyncing}>
-          {isSyncing ? "Syncing..." : `Sync ${providerLabel} Now`}
+          <IntegrationLabel
+            integration={providerLabel}
+            text={isSyncing ? "Syncing..." : `Sync ${providerLabel} Now`}
+          />
         </Button>
       ) : null}
       {message ? <p className="text-xs text-zinc-400">{message}</p> : null}

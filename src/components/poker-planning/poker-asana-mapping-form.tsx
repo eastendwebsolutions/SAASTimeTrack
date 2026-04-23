@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { IntegrationLabel } from "@/components/integrations/integration-label";
 
 type Mapping = {
   sprintFieldGid: string | null;
@@ -44,6 +45,9 @@ export function PokerAsanaMappingForm({ mapping }: { mapping: Mapping }) {
   return (
     <Card className="p-5">
       <form className="space-y-4" onSubmit={save}>
+        <p className="text-sm text-zinc-400">
+          <IntegrationLabel integration="asana" text="Asana custom field mapping" />
+        </p>
         <label className="block text-sm">
           <span className="mb-1 block text-zinc-300">Sprint custom field GID</span>
           <input
