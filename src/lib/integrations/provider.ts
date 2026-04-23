@@ -9,33 +9,73 @@ export function isIntegrationProvider(value: string): value is IntegrationProvid
   return INTEGRATION_PROVIDERS.includes(value as IntegrationProvider);
 }
 
-export async function getActiveProviderForUser(userId: string): Promise<IntegrationProvider> {
-  const user = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-    columns: { activeIntegrationProvider: true },
-  });
+function isMissingSchemaError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("does not exist") ||
+    message.includes("column") ||
+    message.includes("relation") ||
+    message.includes("42703") ||
+    message.includes("42p01")
+  );
+}
 
-  const preferred = user?.activeIntegrationProvider;
+async function hasAsanaConnection(userId: string) {
+  try {
+    return Boolean(await db.query.asanaConnections.findFirst({ where: eq(asanaConnections.userId, userId), columns: { id: true } }));
+  } catch {
+    return false;
+  }
+}
+
+async function hasJiraConnection(userId: string) {
+  try {
+    return Boolean(await db.query.jiraConnections.findFirst({ where: eq(jiraConnections.userId, userId), columns: { id: true } }));
+  } catch {
+    return false;
+  }
+}
+
+async function hasMondayConnection(userId: string) {
+  try {
+    return Boolean(
+      await db.query.mondayConnections.findFirst({
+        where: eq(mondayConnections.userId, userId),
+        columns: { id: true },
+      }),
+    );
+  } catch {
+    return false;
+  }
+}
+
+export async function getActiveProviderForUser(userId: string): Promise<IntegrationProvider> {
+  let preferred: IntegrationProvider | null = null;
+  try {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { activeIntegrationProvider: true },
+    });
+    preferred = user?.activeIntegrationProvider ?? null;
+  } catch (error) {
+    if (!isMissingSchemaError(error)) throw error;
+  }
+
   if (preferred === "jira") {
-    const connected = await db.query.jiraConnections.findFirst({ where: eq(jiraConnections.userId, userId), columns: { id: true } });
+    const connected = await hasJiraConnection(userId);
     if (connected) return "jira";
   }
   if (preferred === "monday") {
-    const connected = await db.query.mondayConnections.findFirst({
-      where: eq(mondayConnections.userId, userId),
-      columns: { id: true },
-    });
+    const connected = await hasMondayConnection(userId);
     if (connected) return "monday";
   }
 
-  const asana = await db.query.asanaConnections.findFirst({ where: eq(asanaConnections.userId, userId), columns: { id: true } });
+  const asana = await hasAsanaConnection(userId);
   if (asana) return "asana";
-  const jira = await db.query.jiraConnections.findFirst({ where: eq(jiraConnections.userId, userId), columns: { id: true } });
+  const jira = await hasJiraConnection(userId);
   if (jira) return "jira";
-  const monday = await db.query.mondayConnections.findFirst({
-    where: eq(mondayConnections.userId, userId),
-    columns: { id: true },
-  });
+  const monday = await hasMondayConnection(userId);
   if (monday) return "monday";
   return "asana";
 }
