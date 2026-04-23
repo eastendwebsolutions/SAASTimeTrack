@@ -1,7 +1,8 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { asanaFetch, refreshAsanaAccessToken } from "@/lib/asana/client";
 import { db } from "@/lib/db";
-import { asanaConnections, companies, projects, syncRuns, tasks, users } from "@/lib/db/schema";
+import { asanaConnections, companies, jiraConnections, projects, syncRuns, tasks, users } from "@/lib/db/schema";
+import { jiraRequest, refreshJiraAccessToken } from "@/lib/jira/client";
 import { decrypt, encrypt } from "@/lib/utils/crypto";
 
 type AsanaWorkspacesResponse = { data: Array<{ gid: string; name: string }> };
@@ -512,6 +513,235 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
       })
       .where(eq(syncRuns.id, run[0].id));
     return { projectsSynced, tasksSynced, subtasksSynced, diagnostics };
+  } catch (error) {
+    await db
+      .update(syncRuns)
+      .set({
+        status: "failed",
+        endedAt: new Date(),
+        error: error instanceof Error ? error.message : "Unknown sync error",
+      })
+      .where(eq(syncRuns.id, run[0].id));
+    throw error;
+  }
+}
+
+type JiraProjectsResponse = {
+  values: Array<{ id: string; key: string; name: string }>;
+};
+
+type JiraSearchResponse = {
+  startAt: number;
+  maxResults: number;
+  total: number;
+  issues: Array<{
+    id: string;
+    key: string;
+    fields: {
+      summary?: string;
+      parent?: {
+        id: string;
+        key: string;
+        fields?: { summary?: string };
+      };
+    };
+  }>;
+};
+
+function isJiraUnauthorized(error: unknown) {
+  return error instanceof Error && error.message.includes("Jira API failed with 401");
+}
+
+export async function syncUserJiraData(userId: string, type: "initial" | "periodic" | "manual" = "manual") {
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const connection = await db.query.jiraConnections.findFirst({
+    where: eq(jiraConnections.userId, userId),
+  });
+  if (!connection) {
+    throw new Error("Jira not connected for this user");
+  }
+  const jiraConnection = connection;
+
+  const runType = type === "initial" ? "jira_initial" : type === "periodic" ? "jira_periodic" : "jira_manual";
+  const run = await db
+    .insert(syncRuns)
+    .values({ companyId: user.companyId, userId, type: runType, status: "running" })
+    .returning();
+
+  try {
+    let accessToken = decrypt(jiraConnection.accessTokenEncrypted);
+    let refreshToken = jiraConnection.refreshTokenEncrypted ? decrypt(jiraConnection.refreshTokenEncrypted) : null;
+
+    async function refreshAccessToken() {
+      if (!refreshToken) {
+        throw new Error("Jira token expired and no refresh token is available. Reconnect Jira.");
+      }
+      const refreshed = await refreshJiraAccessToken(refreshToken);
+      accessToken = refreshed.access_token;
+      refreshToken = refreshed.refresh_token ?? refreshToken;
+      await db
+        .update(jiraConnections)
+        .set({
+          accessTokenEncrypted: encrypt(accessToken),
+          refreshTokenEncrypted: refreshToken ? encrypt(refreshToken) : null,
+          expiresAt: refreshed.expires_in ? new Date(Date.now() + refreshed.expires_in * 1000) : null,
+          scopes: refreshed.scope ?? jiraConnection.scopes,
+        })
+        .where(eq(jiraConnections.userId, userId));
+    }
+
+    async function jiraFetchWithRefresh<T>(path: string) {
+      try {
+        return await jiraRequest<T>(jiraConnection.jiraCloudId, path, accessToken);
+      } catch (error) {
+        if (!isJiraUnauthorized(error)) throw error;
+      }
+
+      await refreshAccessToken();
+      return jiraRequest<T>(jiraConnection.jiraCloudId, path, accessToken);
+    }
+
+    const staleJiraProjects = await db.query.projects.findMany({
+      where: eq(projects.syncedByUserId, userId),
+      columns: { id: true, asanaProjectId: true },
+    });
+    const staleJiraProjectIds = staleJiraProjects
+      .filter((project) => project.asanaProjectId.startsWith("jira:"))
+      .map((project) => project.id);
+    if (staleJiraProjectIds.length > 0) {
+      await db.update(tasks).set({ isActive: false }).where(inArray(tasks.projectId, staleJiraProjectIds));
+      await db.update(projects).set({ isActive: false }).where(inArray(projects.id, staleJiraProjectIds));
+    }
+
+    const projectsPage = await jiraFetchWithRefresh<JiraProjectsResponse>("/project/search?maxResults=100");
+    let projectsSynced = 0;
+    let tasksSynced = 0;
+    let subtasksSynced = 0;
+
+    for (const jiraProject of projectsPage.values) {
+      projectsSynced += 1;
+      const externalProjectId = `jira:${jiraProject.id}`;
+      const [upsertedProject] = await db
+        .insert(projects)
+        .values({
+          companyId: user.companyId,
+          syncedByUserId: userId,
+          asanaProjectId: externalProjectId,
+          name: truncateName(jiraProject.name),
+          isActive: true,
+          lastSyncedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: [projects.syncedByUserId, projects.asanaProjectId],
+          set: {
+            name: truncateName(jiraProject.name),
+            isActive: true,
+            lastSyncedAt: new Date(),
+          },
+        })
+        .returning();
+
+      const issueMap = new Map<string, { name: string; parentId: string | null }>();
+      let startAt = 0;
+      const maxResults = 100;
+      let total = 0;
+      do {
+        const jql = encodeURIComponent(
+          `project = ${jiraProject.key} AND assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC`,
+        );
+        const page = await jiraFetchWithRefresh<JiraSearchResponse>(
+          `/search?jql=${jql}&fields=summary,parent&startAt=${startAt}&maxResults=${maxResults}`,
+        );
+        total = page.total;
+        for (const issue of page.issues) {
+          const issueName = truncateName(issue.fields.summary || issue.key);
+          if (issue.fields.parent) {
+            const parentId = issue.fields.parent.id;
+            const parentName = truncateName(issue.fields.parent.fields?.summary || issue.fields.parent.key);
+            issueMap.set(parentId, { name: parentName, parentId: null });
+            issueMap.set(issue.id, { name: issueName, parentId });
+          } else {
+            issueMap.set(issue.id, { name: issueName, parentId: null });
+          }
+        }
+        startAt += page.maxResults;
+      } while (startAt < total);
+
+      const externalToLocalId = new Map<string, string>();
+      for (const [externalIssueId, issue] of issueMap.entries()) {
+        if (issue.parentId) continue;
+        const externalTaskId = `jira:${externalIssueId}`;
+        const [upsertedTask] = await db
+          .insert(tasks)
+          .values({
+            projectId: upsertedProject.id,
+            asanaTaskId: externalTaskId,
+            name: issue.name,
+            assignedUserId: userId,
+            parentTaskId: null,
+            isActive: true,
+            lastSyncedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: [tasks.projectId, tasks.asanaTaskId],
+            set: {
+              name: issue.name,
+              assignedUserId: userId,
+              parentTaskId: null,
+              isActive: true,
+              lastSyncedAt: new Date(),
+            },
+          })
+          .returning();
+        externalToLocalId.set(externalIssueId, upsertedTask.id);
+        tasksSynced += 1;
+      }
+
+      for (const [externalIssueId, issue] of issueMap.entries()) {
+        if (!issue.parentId) continue;
+        const parentLocalId = externalToLocalId.get(issue.parentId) ?? null;
+        const externalTaskId = `jira:${externalIssueId}`;
+        await db
+          .insert(tasks)
+          .values({
+            projectId: upsertedProject.id,
+            asanaTaskId: externalTaskId,
+            name: issue.name,
+            assignedUserId: userId,
+            parentTaskId: parentLocalId,
+            isActive: true,
+            lastSyncedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: [tasks.projectId, tasks.asanaTaskId],
+            set: {
+              name: issue.name,
+              assignedUserId: userId,
+              parentTaskId: parentLocalId,
+              isActive: true,
+              lastSyncedAt: new Date(),
+            },
+          });
+        tasksSynced += 1;
+        subtasksSynced += 1;
+      }
+    }
+
+    await db
+      .update(syncRuns)
+      .set({
+        status: "success",
+        endedAt: new Date(),
+        projectsSynced,
+        tasksSynced,
+        subtasksSynced,
+      })
+      .where(eq(syncRuns.id, run[0].id));
+    return { projectsSynced, tasksSynced, subtasksSynced };
   } catch (error) {
     await db
       .update(syncRuns)

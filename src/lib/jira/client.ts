@@ -74,6 +74,25 @@ export async function exchangeJiraCode(code: string) {
   return response.json() as Promise<JiraTokenResponse>;
 }
 
+export async function refreshJiraAccessToken(refreshToken: string) {
+  const env = getJiraEnv();
+  const response = await fetch(`${ATLASSIAN_AUTH_BASE}/oauth/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      grant_type: "refresh_token",
+      client_id: env.clientId,
+      client_secret: env.clientSecret,
+      refresh_token: refreshToken,
+    }),
+  });
+  if (!response.ok) {
+    const failureBody = await response.text();
+    throw new Error(`Failed to refresh Jira token (${response.status}): ${failureBody}`);
+  }
+  return response.json() as Promise<JiraTokenResponse>;
+}
+
 export async function fetchJiraAccessibleResources(accessToken: string) {
   const response = await fetch(`${ATLASSIAN_AUTH_BASE}/oauth/token/accessible-resources`, {
     headers: {

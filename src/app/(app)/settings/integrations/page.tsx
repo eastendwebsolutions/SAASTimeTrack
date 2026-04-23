@@ -3,7 +3,7 @@ import { fetchAsanaMe } from "@/lib/asana/client";
 import { db } from "@/lib/db";
 import { asanaConnections, jiraConnections, syncRuns } from "@/lib/db/schema";
 import { decrypt } from "@/lib/utils/crypto";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AsanaSyncPanel } from "@/components/integrations/asana-sync-panel";
@@ -52,6 +52,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
   const jiraErrorMessage = jiraErrorCode ? JIRA_ERROR_MESSAGES[jiraErrorCode] ?? `Something went wrong (${jiraErrorCode}).` : null;
   const triggerInitialSync = params.asana_connected === "1";
   const jiraConnectedNow = params.jira_connected === "1";
+  const triggerJiraInitialSync = jiraConnectedNow;
   const appBase = (process.env.NEXT_PUBLIC_APP_URL ?? "https://your-production-domain").replace(/\/$/, "");
   const asanaCallbackExample = `${appBase}/api/asana/callback`;
   const jiraCallbackExample = `${appBase}/api/jira/callback`;
@@ -75,10 +76,24 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
     }
   }
 
-  const latestRun = await db.query.syncRuns.findFirst({
-    where: and(eq(syncRuns.companyId, user.companyId), eq(syncRuns.userId, user.id)),
+  const latestAsanaRun = await db.query.syncRuns.findFirst({
+    where: and(
+      eq(syncRuns.companyId, user.companyId),
+      eq(syncRuns.userId, user.id),
+      inArray(syncRuns.type, ["initial", "periodic", "manual"]),
+    ),
     orderBy: (table) => [desc(table.startedAt)],
   });
+  const latestJiraRun = jiraReadiness.schemaReady
+    ? await db.query.syncRuns.findFirst({
+        where: and(
+          eq(syncRuns.companyId, user.companyId),
+          eq(syncRuns.userId, user.id),
+          inArray(syncRuns.type, ["jira_initial", "jira_periodic", "jira_manual"]),
+        ),
+        orderBy: (table) => [desc(table.startedAt)],
+      })
+    : null;
 
   return (
     <div className="space-y-6">
@@ -176,6 +191,26 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
               </Button>
             )}
           </div>
+          <AsanaSyncPanel
+            providerLabel="Jira"
+            initialSyncPath="/api/jira/sync/initial"
+            statusPath="/api/jira/sync/status"
+            connected={Boolean(jiraConnection)}
+            triggerInitialSync={triggerJiraInitialSync}
+            initialRun={
+              latestJiraRun
+                ? {
+                    status: latestJiraRun.status,
+                    startedAt: latestJiraRun.startedAt.toISOString(),
+                    endedAt: latestJiraRun.endedAt?.toISOString() ?? null,
+                    error: latestJiraRun.error ?? null,
+                    projectsSynced: latestJiraRun.projectsSynced,
+                    tasksSynced: latestJiraRun.tasksSynced,
+                    subtasksSynced: latestJiraRun.subtasksSynced,
+                  }
+                : null
+            }
+          />
         </div>
       </Card>
       <Card className="p-5">
@@ -228,15 +263,15 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
           connected={Boolean(connection)}
           triggerInitialSync={triggerInitialSync}
           initialRun={
-            latestRun
+            latestAsanaRun
               ? {
-                  status: latestRun.status,
-                  startedAt: latestRun.startedAt.toISOString(),
-                  endedAt: latestRun.endedAt?.toISOString() ?? null,
-                  error: latestRun.error ?? null,
-                  projectsSynced: latestRun.projectsSynced,
-                  tasksSynced: latestRun.tasksSynced,
-                  subtasksSynced: latestRun.subtasksSynced,
+                  status: latestAsanaRun.status,
+                  startedAt: latestAsanaRun.startedAt.toISOString(),
+                  endedAt: latestAsanaRun.endedAt?.toISOString() ?? null,
+                  error: latestAsanaRun.error ?? null,
+                  projectsSynced: latestAsanaRun.projectsSynced,
+                  tasksSynced: latestAsanaRun.tasksSynced,
+                  subtasksSynced: latestAsanaRun.subtasksSynced,
                 }
               : null
           }

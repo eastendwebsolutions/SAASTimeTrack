@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { getJiraReadiness } from "@/lib/integrations/jira-readiness";
+import { syncUserJiraData } from "@/lib/services/sync";
 
 export async function POST() {
   const user = await getOrCreateCurrentUser();
@@ -16,5 +17,6 @@ export async function POST() {
     );
   }
 
-  return NextResponse.json({ error: "Jira periodic sync is not enabled in this phase." }, { status: 501 });
+  await syncUserJiraData(user.id, "periodic");
+  return NextResponse.json({ ok: true });
 }

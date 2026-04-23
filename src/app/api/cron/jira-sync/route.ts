@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
 import { getJiraReadiness } from "@/lib/integrations/jira-readiness";
+import { syncUserJiraData } from "@/lib/services/sync";
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -13,5 +15,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, skipped: true, reason: "jira_not_ready", readiness });
   }
 
-  return NextResponse.json({ ok: true, skipped: true, reason: "jira_sync_staged_not_enabled" });
+  const connections = await db.query.jiraConnections.findMany({ columns: { userId: true } });
+  const syncUserIds = connections.map((connection) => connection.userId);
+  await Promise.allSettled(syncUserIds.map((syncUserId) => syncUserJiraData(syncUserId, "periodic")));
+  return NextResponse.json({ ok: true, queued: syncUserIds.length });
 }

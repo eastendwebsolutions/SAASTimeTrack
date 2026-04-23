@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 type SyncRun = {
@@ -15,31 +15,41 @@ type SyncRun = {
 };
 
 type Props = {
+  providerLabel?: string;
+  initialSyncPath?: string;
+  statusPath?: string;
   connected: boolean;
   initialRun: SyncRun | null;
   /** After OAuth callback; runs first sync in a separate request (avoids callback timeouts). */
   triggerInitialSync?: boolean;
 };
 
-export function AsanaSyncPanel({ connected, initialRun, triggerInitialSync = false }: Props) {
+export function AsanaSyncPanel({
+  providerLabel = "Asana",
+  initialSyncPath = "/api/asana/sync/initial",
+  statusPath = "/api/asana/sync/status",
+  connected,
+  initialRun,
+  triggerInitialSync = false,
+}: Props) {
   const router = useRouter();
   const postConnectStarted = useRef(false);
   const [run, setRun] = useState<SyncRun | null>(initialRun);
   const [isSyncing, setIsSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  async function refreshStatus() {
-    const response = await fetch("/api/asana/sync/status", { cache: "no-store" });
+  const refreshStatus = useCallback(async () => {
+    const response = await fetch(statusPath, { cache: "no-store" });
     if (!response.ok) return;
     const data = (await response.json()) as { latestRun: SyncRun | null };
     setRun(data.latestRun);
-  }
+  }, [statusPath]);
 
   async function syncNow() {
     setIsSyncing(true);
     setMessage("Sync in progress...");
     try {
-      const response = await fetch("/api/asana/sync/initial", { method: "POST" });
+      const response = await fetch(initialSyncPath, { method: "POST" });
       const data = (await response.json()) as {
         ok?: boolean;
         debugBuild?: string;
@@ -78,9 +88,9 @@ export function AsanaSyncPanel({ connected, initialRun, triggerInitialSync = fal
     postConnectStarted.current = true;
     void (async () => {
       setIsSyncing(true);
-      setMessage("Finishing Asana setup (first sync)…");
+      setMessage(`Finishing ${providerLabel} setup (first sync)…`);
       try {
-        const response = await fetch("/api/asana/sync/initial", { method: "POST" });
+        const response = await fetch(initialSyncPath, { method: "POST" });
         const data = (await response.json()) as {
           ok?: boolean;
           debugBuild?: string;
@@ -98,7 +108,7 @@ export function AsanaSyncPanel({ connected, initialRun, triggerInitialSync = fal
           details?: string;
         };
         if (!response.ok || !data.ok) {
-          setMessage(data.details || data.error || "First sync failed. Use “Sync Asana Now” to retry.");
+          setMessage(data.details || data.error || `First sync failed. Use “Sync ${providerLabel} Now” to retry.`);
         } else {
           setMessage(
             `Sync complete. Projects: ${data.summary?.projectsSynced ?? 0}, Tasks: ${data.summary?.tasksSynced ?? 0}, Subtasks: ${data.summary?.subtasksSynced ?? 0}` +
@@ -115,7 +125,7 @@ export function AsanaSyncPanel({ connected, initialRun, triggerInitialSync = fal
         router.refresh();
       }
     })();
-  }, [triggerInitialSync, connected, router]);
+  }, [triggerInitialSync, connected, providerLabel, initialSyncPath, refreshStatus, router]);
 
   return (
     <div className="mt-4 space-y-3 border-t border-zinc-800 pt-4">
@@ -140,7 +150,7 @@ export function AsanaSyncPanel({ connected, initialRun, triggerInitialSync = fal
 
       {connected ? (
         <Button type="button" variant="secondary" onClick={syncNow} disabled={isSyncing}>
-          {isSyncing ? "Syncing..." : "Sync Asana Now"}
+          {isSyncing ? "Syncing..." : `Sync ${providerLabel} Now`}
         </Button>
       ) : null}
       {message ? <p className="text-xs text-zinc-400">{message}</p> : null}

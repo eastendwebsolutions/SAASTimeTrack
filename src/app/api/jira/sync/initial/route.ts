@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { getJiraReadiness } from "@/lib/integrations/jira-readiness";
+import { syncUserJiraData } from "@/lib/services/sync";
 
 export const maxDuration = 120;
 
@@ -18,11 +19,16 @@ export async function POST() {
     );
   }
 
-  return NextResponse.json(
-    {
-      error: "Jira sync is staged for the next rollout phase.",
-      details: "Connect is enabled; sync execution remains intentionally disabled for safety.",
-    },
-    { status: 501 },
-  );
+  try {
+    const summary = await syncUserJiraData(user.id, "initial");
+    return NextResponse.json({ ok: true, summary, debugBuild: "jira-sync-exec-v1" });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: "Jira sync failed",
+        details: error instanceof Error ? error.message : "Unknown sync error",
+      },
+      { status: 500 },
+    );
+  }
 }
