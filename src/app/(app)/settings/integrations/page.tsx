@@ -1,7 +1,7 @@
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { fetchAsanaMe } from "@/lib/asana/client";
 import { db } from "@/lib/db";
-import { asanaConnections, syncRuns } from "@/lib/db/schema";
+import { asanaConnections, jiraConnections, syncRuns } from "@/lib/db/schema";
 import { decrypt } from "@/lib/utils/crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { Card } from "@/components/ui/card";
@@ -18,7 +18,25 @@ const ASANA_ERROR_MESSAGES: Record<string, string> = {
   save_failed: "Could not save the connection to the database. Try again or check server logs.",
 };
 
-type SearchParams = Promise<{ config?: string; missing?: string; asana_error?: string; asana_connected?: string }>;
+const JIRA_ERROR_MESSAGES: Record<string, string> = {
+  missing_params: "Jira did not return a complete authorization response. Use Connect Jira again.",
+  invalid_state: "The connect link was invalid or expired. Open Settings -> Integrations and use Connect Jira again.",
+  user_mismatch: "You signed in as a different user than the one who started connect. Try Connect Jira again.",
+  no_site_access: "Jira token succeeded but no accessible Jira site was returned for this user.",
+  exchange_failed: "Jira token exchange failed. Verify Jira OAuth app settings and retry.",
+  not_enabled: "Jira is currently gated. Enable schema + feature flag before connecting.",
+  schema_not_ready: "Jira DB schema is not ready yet. Apply migration first, then connect.",
+  env_invalid: "Jira environment settings are invalid.",
+};
+
+type SearchParams = Promise<{
+  config?: string;
+  missing?: string;
+  asana_error?: string;
+  asana_connected?: string;
+  jira_error?: string;
+  jira_connected?: string;
+}>;
 
 export default async function IntegrationsPage({ searchParams }: { searchParams?: SearchParams }) {
   const user = await getOrCreateCurrentUser();
@@ -26,10 +44,14 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
 
   const params = searchParams ? await searchParams : {};
   const showAsanaConfigHelp = params.config === "asana";
+  const showJiraConfigHelp = params.config === "jira";
   const missingKeys = params.missing?.split(",").filter(Boolean) ?? [];
   const asanaErrorCode = params.asana_error?.trim();
   const asanaErrorMessage = asanaErrorCode ? ASANA_ERROR_MESSAGES[asanaErrorCode] ?? `Something went wrong (${asanaErrorCode}).` : null;
+  const jiraErrorCode = params.jira_error?.trim();
+  const jiraErrorMessage = jiraErrorCode ? JIRA_ERROR_MESSAGES[jiraErrorCode] ?? `Something went wrong (${jiraErrorCode}).` : null;
   const triggerInitialSync = params.asana_connected === "1";
+  const jiraConnectedNow = params.jira_connected === "1";
   const appBase = (process.env.NEXT_PUBLIC_APP_URL ?? "https://your-production-domain").replace(/\/$/, "");
   const asanaCallbackExample = `${appBase}/api/asana/callback`;
   const jiraCallbackExample = `${appBase}/api/jira/callback`;
@@ -38,6 +60,11 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
   const connection = await db.query.asanaConnections.findFirst({
     where: eq(asanaConnections.userId, user.id),
   });
+  const jiraConnection = jiraReadiness.schemaReady
+    ? await db.query.jiraConnections.findFirst({
+        where: eq(jiraConnections.userId, user.id),
+      })
+    : null;
 
   let asanaMe: Awaited<ReturnType<typeof fetchAsanaMe>> | null = null;
   if (connection) {
@@ -90,6 +117,21 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
           <p className="mt-3 text-xs text-amber-300/80">Save variables, then redeploy the project. After that, use Connect Asana again.</p>
         </Card>
       ) : null}
+      {jiraErrorMessage ? (
+        <Card className="border border-rose-900/80 bg-rose-950/40 p-4 text-sm text-rose-100">
+          <p className="font-medium text-rose-50">Jira connect did not finish</p>
+          <p className="mt-2 text-rose-200/90">{jiraErrorMessage}</p>
+        </Card>
+      ) : null}
+      {showJiraConfigHelp ? (
+        <Card className="border border-amber-800/80 bg-amber-950/40 p-4 text-sm text-amber-100">
+          <p className="font-medium text-amber-50">Jira rollout prerequisites are not complete</p>
+          {missingKeys.length > 0 ? (
+            <p className="mt-2 text-xs text-amber-300/90">Missing or invalid: {missingKeys.join(", ")}</p>
+          ) : null}
+          <p className="mt-2 text-xs text-amber-300/80">Apply migration, set env vars, and enable feature flag before connecting.</p>
+        </Card>
+      ) : null}
       <Card className="p-5">
         <h2 className="mb-2 font-medium">Jira (Safe Rollout)</h2>
         <p className="mb-4 text-sm text-zinc-400">
@@ -122,6 +164,18 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
               Jira connect/sync endpoints remain disabled until all checks are ready.
             </p>
           ) : null}
+          {jiraConnectedNow ? <p className="mt-2 text-xs text-emerald-300">Jira connected successfully.</p> : null}
+          <div className="mt-3">
+            {jiraReadiness.fullyReady ? (
+              <a href="/api/jira/connect/url">
+                <Button variant="secondary">{jiraConnection ? "Reconnect Jira" : "Connect Jira"}</Button>
+              </a>
+            ) : (
+              <Button variant="secondary" disabled>
+                Connect Jira (locked until ready)
+              </Button>
+            )}
+          </div>
         </div>
       </Card>
       <Card className="p-5">

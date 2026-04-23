@@ -166,6 +166,20 @@ export const asanaConnections = pgTable("asana_connections", {
   ...timestamps,
 });
 
+export const jiraConnections = pgTable("jira_connections", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+  jiraAccountId: varchar("jira_account_id", { length: 120 }).notNull(),
+  jiraCloudId: varchar("jira_cloud_id", { length: 120 }).notNull(),
+  jiraSiteName: varchar("jira_site_name", { length: 255 }),
+  accessTokenEncrypted: text("access_token_encrypted").notNull(),
+  refreshTokenEncrypted: text("refresh_token_encrypted"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  scopes: text("scopes"),
+  connectedAt: timestamp("connected_at", { withTimezone: true }).defaultNow().notNull(),
+  ...timestamps,
+});
+
 export const syncRuns = pgTable("sync_runs", {
   id: uuid("id").defaultRandom().primaryKey(),
   companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
