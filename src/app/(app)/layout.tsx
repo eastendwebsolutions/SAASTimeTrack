@@ -8,6 +8,7 @@ import { AsanaHeaderStatus } from "@/components/integrations/asana-header-status
 import { db } from "@/lib/db";
 import { asanaConnections, jiraConnections, mondayConnections, syncRuns } from "@/lib/db/schema";
 import { getActiveProviderForUser } from "@/lib/integrations/provider";
+import { isMissingIntegrationSchemaError } from "@/lib/integrations/schema-compat";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getOrCreateCurrentUser();
@@ -17,14 +18,24 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       })
     : null;
   const jiraConnection = user
-    ? await db.query.jiraConnections.findFirst({
-        where: eq(jiraConnections.userId, user.id),
-      })
+    ? await db.query.jiraConnections
+        .findFirst({
+          where: eq(jiraConnections.userId, user.id),
+        })
+        .catch((error) => {
+          if (!isMissingIntegrationSchemaError(error)) throw error;
+          return null;
+        })
     : null;
   const mondayConnection = user
-    ? await db.query.mondayConnections.findFirst({
-        where: eq(mondayConnections.userId, user.id),
-      })
+    ? await db.query.mondayConnections
+        .findFirst({
+          where: eq(mondayConnections.userId, user.id),
+        })
+        .catch((error) => {
+          if (!isMissingIntegrationSchemaError(error)) throw error;
+          return null;
+        })
     : null;
   const activeProvider = user ? await getActiveProviderForUser(user.id) : "asana";
   const latestSuccessfulRun = user
