@@ -56,13 +56,27 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <Link href="/time">Time</Link>
               <Link href="/timesheet">Timesheet</Link>
               <Link href="/timesheet/archive">Archive</Link>
-              {canSeePokerPlanning ? <Link href="/poker-planning">Poker Planning</Link> : null}
-              {canSeeAdmin ? <Link href="/admin/review">Admin</Link> : null}
               <Link href="/settings/integrations">Integrations</Link>
               <Link href="/settings/profile">Profile</Link>
             </nav>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            {canSeePokerPlanning ? (
+              <Link
+                href="/poker-planning"
+                className="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
+              >
+                Poker Planning
+              </Link>
+            ) : null}
+            {canSeeAdmin ? (
+              <Link
+                href="/admin/review"
+                className="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
+              >
+                Admin
+              </Link>
+            ) : null}
             <AsanaHeaderStatus
               asanaConnected={Boolean(connection)}
               lastSyncLabel={latestSyncLabel}
