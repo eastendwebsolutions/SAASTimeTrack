@@ -1,15 +1,21 @@
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
 import { and, eq, inArray } from "drizzle-orm";
+import { AuditTrailTable } from "@/components/audit/audit-trail-table";
 import { projects, tasks } from "@/lib/db/schema";
 import { Card } from "@/components/ui/card";
 import { QuickEntryForm } from "@/components/time/quick-entry-form";
+import { listAuditChanges } from "@/lib/services/audit-log";
 
-export default async function TimePage() {
+type SearchParams = Promise<{ auditPage?: string }>;
+
+export default async function TimePage({ searchParams }: { searchParams: SearchParams }) {
   const user = await getOrCreateCurrentUser();
   if (!user) {
     return null;
   }
+  const params = await searchParams;
+  const auditPage = Math.max(1, Number(params.auditPage ?? "1") || 1);
 
   const availableProjects = await db.query.projects.findMany({
     where: and(
@@ -28,12 +34,26 @@ export default async function TimePage() {
       })
     : [];
 
+  const audit = await listAuditChanges({
+    companyId: user.companyId,
+    pageKey: "quick_time_entry",
+    page: auditPage,
+    pageSize: 10,
+  });
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Quick Time Entry</h1>
       <Card className="p-5">
         <QuickEntryForm projects={availableProjects} tasks={availableTasks} />
       </Card>
+      <AuditTrailTable
+        rows={audit.rows}
+        page={audit.page}
+        totalPages={audit.totalPages}
+        pageParam="auditPage"
+        basePath="/time"
+      />
     </div>
   );
 }

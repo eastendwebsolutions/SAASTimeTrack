@@ -1,13 +1,15 @@
 import { and, eq, gte, inArray, lte, or } from "drizzle-orm";
+import { AuditTrailTable } from "@/components/audit/audit-trail-table";
 import { Card } from "@/components/ui/card";
 import { canReviewEntries, isSuperAdmin } from "@/lib/auth/rbac";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
 import { projects, tasks, timeEntries, users } from "@/lib/db/schema";
+import { listAuditChanges } from "@/lib/services/audit-log";
 import { getWeekBounds } from "@/lib/services/week";
 import { TimesheetDetailEditor } from "@/components/admin/timesheet-detail-editor";
 
-type SearchParams = Promise<{ userId?: string; weekStart?: string }>;
+type SearchParams = Promise<{ userId?: string; weekStart?: string; auditPage?: string }>;
 
 function toDateInputValue(value: Date) {
   const offsetMs = value.getTimezoneOffset() * 60_000;
@@ -23,6 +25,7 @@ export default async function AdminTimesheetDetailPage({ searchParams }: { searc
   const params = await searchParams;
   const targetUserId = params.userId;
   const weekStart = params.weekStart;
+  const auditPage = Math.max(1, Number(params.auditPage ?? "1") || 1);
   if (!targetUserId || !weekStart) {
     return <p className="text-zinc-400">Missing user/week parameters.</p>;
   }
@@ -73,8 +76,17 @@ export default async function AdminTimesheetDetailPage({ searchParams }: { searc
         })
       : [];
 
+  const auditContextKey = `${targetUser.id}:${bounds.start.toISOString()}`;
+  const audit = await listAuditChanges({
+    companyId: targetUser.companyId,
+    pageKey: "admin_timesheet_detail",
+    contextKey: auditContextKey,
+    page: auditPage,
+    pageSize: 10,
+  });
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Timesheet Detail Editor</h1>
       <p className="text-sm text-zinc-400">
         User: {targetUser.email} | Week of {bounds.start.toLocaleDateString("en-US")}
@@ -102,6 +114,14 @@ export default async function AdminTimesheetDetailPage({ searchParams }: { searc
           }))}
         />
       </Card>
+      <AuditTrailTable
+        rows={audit.rows}
+        page={audit.page}
+        totalPages={audit.totalPages}
+        pageParam="auditPage"
+        basePath="/admin/timesheet-detail"
+        query={{ userId: targetUserId, weekStart }}
+      />
     </div>
   );
 }

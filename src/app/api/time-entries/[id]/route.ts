@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { companySettings, timeEntries } from "@/lib/db/schema";
 import { canReviewEntries, isSuperAdmin } from "@/lib/auth/rbac";
 import { syncActualPointsForEntryTarget } from "@/lib/services/asana-actual-points";
+import { logAuditChanges } from "@/lib/services/audit-log";
+import { getWeekBounds } from "@/lib/services/week";
 import { getDurationMinutes } from "@/lib/validation/time-entry";
 import { assertProjectTaskOwnedByUser } from "@/lib/validation/time-entry-ownership";
 
@@ -92,6 +94,89 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     )
     .returning();
 
+  const bounds = getWeekBounds(new Date(updated.entryDate));
+  const contextKey = `${updated.userId}:${bounds.start.toISOString()}`;
+  const pageKey = isReviewer && !isOwner ? "admin_timesheet_detail" : "timesheet_weekly";
+  await logAuditChanges([
+    {
+      companyId: updated.companyId,
+      actorUserId: user.id,
+      pageKey,
+      contextKey,
+      entityType: "time_entry",
+      entityId: updated.id,
+      fieldName: "Summary",
+      beforeValue: entry.summary,
+      afterValue: updated.summary,
+    },
+    {
+      companyId: updated.companyId,
+      actorUserId: user.id,
+      pageKey,
+      contextKey,
+      entityType: "time_entry",
+      entityId: updated.id,
+      fieldName: "Entry date",
+      beforeValue: new Date(entry.entryDate).toISOString(),
+      afterValue: new Date(updated.entryDate).toISOString(),
+    },
+    {
+      companyId: updated.companyId,
+      actorUserId: user.id,
+      pageKey,
+      contextKey,
+      entityType: "time_entry",
+      entityId: updated.id,
+      fieldName: "Time in",
+      beforeValue: new Date(entry.timeIn).toISOString(),
+      afterValue: new Date(updated.timeIn).toISOString(),
+    },
+    {
+      companyId: updated.companyId,
+      actorUserId: user.id,
+      pageKey,
+      contextKey,
+      entityType: "time_entry",
+      entityId: updated.id,
+      fieldName: "Time out",
+      beforeValue: new Date(entry.timeOut).toISOString(),
+      afterValue: new Date(updated.timeOut).toISOString(),
+    },
+    {
+      companyId: updated.companyId,
+      actorUserId: user.id,
+      pageKey,
+      contextKey,
+      entityType: "time_entry",
+      entityId: updated.id,
+      fieldName: "Project ID",
+      beforeValue: entry.projectId,
+      afterValue: updated.projectId,
+    },
+    {
+      companyId: updated.companyId,
+      actorUserId: user.id,
+      pageKey,
+      contextKey,
+      entityType: "time_entry",
+      entityId: updated.id,
+      fieldName: "Task ID",
+      beforeValue: entry.taskId,
+      afterValue: updated.taskId,
+    },
+    {
+      companyId: updated.companyId,
+      actorUserId: user.id,
+      pageKey,
+      contextKey,
+      entityType: "time_entry",
+      entityId: updated.id,
+      fieldName: "Subtask ID",
+      beforeValue: entry.subtaskId,
+      afterValue: updated.subtaskId,
+    },
+  ]);
+
   const nextTarget = {
     companyId: updated.companyId,
     projectId: nextProjectId,
@@ -130,6 +215,32 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   if (entry.lockedAt) {
     return NextResponse.json({ error: "Entry is locked" }, { status: 403 });
   }
+
+  const bounds = getWeekBounds(new Date(entry.entryDate));
+  await logAuditChanges([
+    {
+      companyId: entry.companyId,
+      actorUserId: user.id,
+      pageKey: "timesheet_weekly",
+      contextKey: `${entry.userId}:${bounds.start.toISOString()}`,
+      entityType: "time_entry",
+      entityId: entry.id,
+      fieldName: "Entry status",
+      beforeValue: "draft",
+      afterValue: "deleted",
+    },
+    {
+      companyId: entry.companyId,
+      actorUserId: user.id,
+      pageKey: "timesheet_weekly",
+      contextKey: `${entry.userId}:${bounds.start.toISOString()}`,
+      entityType: "time_entry",
+      entityId: entry.id,
+      fieldName: "Summary",
+      beforeValue: entry.summary,
+      afterValue: null,
+    },
+  ]);
 
   await db.delete(timeEntries).where(
     isSuperAdmin(user.role)

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { canReviewEntries, isSuperAdmin } from "@/lib/auth/rbac";

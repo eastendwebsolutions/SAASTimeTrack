@@ -4,6 +4,7 @@ import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { isSuperAdmin } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
 import { ppWorkspaceAdmins, users } from "@/lib/db/schema";
+import { logAuditChanges } from "@/lib/services/audit-log";
 
 type Params = Promise<{ id: string }>;
 
@@ -36,6 +37,14 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
+  const existingAccess = await db.query.ppWorkspaceAdmins.findFirst({
+    where: and(
+      eq(ppWorkspaceAdmins.companyId, target.companyId),
+      eq(ppWorkspaceAdmins.userId, target.id),
+      eq(ppWorkspaceAdmins.asanaWorkspaceId, workspaceId),
+    ),
+  });
+
   if (enabled) {
     await db
       .insert(ppWorkspaceAdmins)
@@ -57,6 +66,21 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         ),
       );
   }
+
+  await logAuditChanges([
+    {
+      companyId: target.companyId,
+      actorUserId: actor.id,
+      pageKey: "admin_review",
+      entityType: "poker_workspace_admin",
+      entityId: target.id,
+      contextKey: workspaceId,
+      fieldName: "Poker Planning Admin",
+      beforeValue: existingAccess ? "Enabled" : "Disabled",
+      afterValue: enabled ? "Enabled" : "Disabled",
+      metadataJson: { workspaceId, targetUserId: target.id },
+    },
+  ]);
 
   return NextResponse.redirect(new URL("/admin/review", request.url));
 }

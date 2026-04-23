@@ -43,6 +43,13 @@
       "when": 1776901800000,
       "tag": "0005_workspace_scoped_poker_admins",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1776903600000,
+      "tag": "0006_edit_audit_trail",
+      "breakpoints": true
     }
   ]
 }

@@ -1,17 +1,23 @@
 import { and, eq, gte, inArray, lte, or } from "drizzle-orm";
 import { eachDayOfInterval, format } from "date-fns";
 import Link from "next/link";
+import { AuditTrailTable } from "@/components/audit/audit-trail-table";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
 import { projects, timeEntries, timesheets } from "@/lib/db/schema";
+import { listAuditChanges } from "@/lib/services/audit-log";
 import { getWeekBounds } from "@/lib/services/week";
 import { TimesheetClient } from "@/components/timesheet/timesheet-client";
 
-export default async function TimesheetPage() {
+type SearchParams = Promise<{ auditPage?: string }>;
+
+export default async function TimesheetPage({ searchParams }: { searchParams: SearchParams }) {
   const user = await getOrCreateCurrentUser();
   if (!user) return null;
+  const params = await searchParams;
+  const auditPage = Math.max(1, Number(params.auditPage ?? "1") || 1);
 
   const { start, end } = getWeekBounds(new Date());
   const entries = await db.query.timeEntries.findMany({
@@ -42,6 +48,13 @@ export default async function TimesheetPage() {
   const submittedMessage = currentSheet?.submittedAt
     ? `Timesheet has been submitted on ${currentSheet.submittedAt.toLocaleString("en-US")} from ${currentSheet.submittedFromIp ?? "unknown"}.`
     : null;
+  const audit = await listAuditChanges({
+    companyId: user.companyId,
+    pageKey: "timesheet_weekly",
+    contextKey: `${user.id}:${start.toISOString()}`,
+    page: auditPage,
+    pageSize: 10,
+  });
 
   return (
     <div className="space-y-6">
@@ -77,6 +90,13 @@ export default async function TimesheetPage() {
           <TimesheetClient entries={entries} weekDates={weekDates} projectOptions={projectOptions} timezone={user.timezone ?? "UTC"} />
         </div>
       </Card>
+      <AuditTrailTable
+        rows={audit.rows}
+        page={audit.page}
+        totalPages={audit.totalPages}
+        pageParam="auditPage"
+        basePath="/timesheet"
+      />
     </div>
   );
 }

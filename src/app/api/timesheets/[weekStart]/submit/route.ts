@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { adminNotifications, timeEntries, timesheets, users } from "@/lib/db/schema";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
+import { logAuditChanges } from "@/lib/services/audit-log";
 import { getWeekBounds } from "@/lib/services/week";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ weekStart: string }> }) {
@@ -37,6 +38,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .update(timeEntries)
     .set({ status: "submitted", lockedAt: submittedAt, timesheetId: sheet.id })
     .where(and(eq(timeEntries.userId, user.id), gte(timeEntries.entryDate, bounds.start), lte(timeEntries.entryDate, bounds.end)));
+
+  await logAuditChanges([
+    {
+      companyId: user.companyId,
+      actorUserId: user.id,
+      pageKey: "timesheet_weekly",
+      contextKey: `${user.id}:${bounds.start.toISOString()}`,
+      entityType: "timesheet",
+      entityId: sheet.id,
+      fieldName: "Timesheet status",
+      beforeValue: "draft",
+      afterValue: "submitted",
+      metadataJson: { weekStart: bounds.start.toISOString(), submittedFromIp },
+    },
+  ]);
 
   const adminUsers = await db.query.users.findMany({
     where: and(eq(users.companyId, user.companyId), inArray(users.role, ["company_admin", "super_admin"])),

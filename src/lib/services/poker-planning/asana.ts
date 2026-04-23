@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { asanaRequest, refreshAsanaAccessToken } from "@/lib/asana/client";
 import { db } from "@/lib/db";
 import { asanaConnections, companySettings, users } from "@/lib/db/schema";
+import { logAuditChanges } from "@/lib/services/audit-log";
 import { decrypt, encrypt } from "@/lib/utils/crypto";
 
 type AsanaTask = {
@@ -137,6 +138,10 @@ export async function updateCompanyPokerAsanaMapping(args: {
     throw new Error("Forbidden");
   }
 
+  const previous = await db.query.companySettings.findFirst({
+    where: eq(companySettings.companyId, args.companyId),
+  });
+
   await db
     .insert(companySettings)
     .values({
@@ -155,6 +160,49 @@ export async function updateCompanyPokerAsanaMapping(args: {
         asanaStoryPointsFieldName: args.storyPointsFieldName,
       },
     });
+
+  await logAuditChanges([
+    {
+      companyId: args.companyId,
+      actorUserId: args.actorUserId,
+      pageKey: "poker_planning_settings",
+      entityType: "company_settings",
+      entityId: args.companyId,
+      fieldName: "Sprint custom field GID",
+      beforeValue: previous?.asanaSprintFieldGid ?? null,
+      afterValue: args.sprintFieldGid,
+    },
+    {
+      companyId: args.companyId,
+      actorUserId: args.actorUserId,
+      pageKey: "poker_planning_settings",
+      entityType: "company_settings",
+      entityId: args.companyId,
+      fieldName: "Sprint custom field name",
+      beforeValue: previous?.asanaSprintFieldName ?? null,
+      afterValue: args.sprintFieldName,
+    },
+    {
+      companyId: args.companyId,
+      actorUserId: args.actorUserId,
+      pageKey: "poker_planning_settings",
+      entityType: "company_settings",
+      entityId: args.companyId,
+      fieldName: "Story Points custom field GID",
+      beforeValue: previous?.asanaStoryPointsFieldGid ?? null,
+      afterValue: args.storyPointsFieldGid,
+    },
+    {
+      companyId: args.companyId,
+      actorUserId: args.actorUserId,
+      pageKey: "poker_planning_settings",
+      entityType: "company_settings",
+      entityId: args.companyId,
+      fieldName: "Story Points custom field name",
+      beforeValue: previous?.asanaStoryPointsFieldName ?? null,
+      afterValue: args.storyPointsFieldName,
+    },
+  ]);
 }
 
 export async function fetchSprintFieldOptions(args: { userId: string; projectGid: string; sprintFieldGid: string }) {

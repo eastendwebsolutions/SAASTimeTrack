@@ -4,6 +4,7 @@ import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
 import { timeEntries } from "@/lib/db/schema";
 import { syncActualPointsForEntryTarget } from "@/lib/services/asana-actual-points";
+import { logAuditChanges } from "@/lib/services/audit-log";
 import { getWeekBounds } from "@/lib/services/week";
 import { getDurationMinutes, timeEntryPayloadSchema } from "@/lib/validation/time-entry";
 import { assertProjectTaskOwnedByUser } from "@/lib/validation/time-entry-ownership";
@@ -104,6 +105,55 @@ export async function POST(request: NextRequest) {
       status: "draft",
     })
     .returning();
+
+  const weekBounds = getWeekBounds(new Date(entry.entryDate));
+  const contextKey = `${user.id}:${weekBounds.start.toISOString()}`;
+  await logAuditChanges([
+    {
+      companyId: user.companyId,
+      actorUserId: user.id,
+      pageKey: "quick_time_entry",
+      contextKey,
+      entityType: "time_entry",
+      entityId: entry.id,
+      fieldName: "Summary",
+      beforeValue: null,
+      afterValue: entry.summary,
+    },
+    {
+      companyId: user.companyId,
+      actorUserId: user.id,
+      pageKey: "quick_time_entry",
+      contextKey,
+      entityType: "time_entry",
+      entityId: entry.id,
+      fieldName: "Time in",
+      beforeValue: null,
+      afterValue: new Date(entry.timeIn).toISOString(),
+    },
+    {
+      companyId: user.companyId,
+      actorUserId: user.id,
+      pageKey: "quick_time_entry",
+      contextKey,
+      entityType: "time_entry",
+      entityId: entry.id,
+      fieldName: "Time out",
+      beforeValue: null,
+      afterValue: new Date(entry.timeOut).toISOString(),
+    },
+    {
+      companyId: user.companyId,
+      actorUserId: user.id,
+      pageKey: "quick_time_entry",
+      contextKey,
+      entityType: "time_entry",
+      entityId: entry.id,
+      fieldName: "Task ID",
+      beforeValue: null,
+      afterValue: entry.taskId,
+    },
+  ]);
 
   await syncActualPointsForEntryTarget({
     companyId: user.companyId,

@@ -315,3 +315,26 @@ export const ppWorkspaceAdmins = pgTable("pp_workspace_admins", {
   ),
   userWorkspaceIdx: index("pp_workspace_admins_user_workspace_idx").on(table.userId, table.asanaWorkspaceId),
 }));
+
+export const auditChangeLog = pgTable("audit_change_log", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  pageKey: varchar("page_key", { length: 100 }).notNull(),
+  contextKey: varchar("context_key", { length: 160 }),
+  entityType: varchar("entity_type", { length: 80 }).notNull(),
+  entityId: varchar("entity_id", { length: 100 }),
+  fieldName: varchar("field_name", { length: 120 }).notNull(),
+  beforeValue: text("before_value"),
+  afterValue: text("after_value"),
+  actorUserId: uuid("actor_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  metadataJson: jsonb("metadata_json"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  companyPageCreatedIdx: index("audit_change_log_company_page_created_idx").on(table.companyId, table.pageKey, table.createdAt),
+  companyPageContextCreatedIdx: index("audit_change_log_company_page_context_created_idx").on(
+    table.companyId,
+    table.pageKey,
+    table.contextKey,
+    table.createdAt,
+  ),
+}));
