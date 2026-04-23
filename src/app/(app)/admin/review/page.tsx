@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { canReviewEntries, isSuperAdmin } from "@/lib/auth/rbac";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
-import { adminNotifications, entryComments, timeEntries, timesheets, users } from "@/lib/db/schema";
+import { adminNotifications, companies, entryComments, timeEntries, timesheets, users } from "@/lib/db/schema";
 import { SuperAdminReviewPanel } from "@/components/admin/super-admin-review-panel";
 import { listAuditChanges } from "@/lib/services/audit-log";
 import { getClerkAccessStatus } from "@/lib/services/clerk-admin";
@@ -208,8 +208,21 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
     submittedFromIp: null,
   }));
   const reviewSheets = [...submittedSheets, ...companyDraftSheets];
+  const actorCompany = await db.query.companies.findFirst({
+    where: eq(companies.id, user.companyId),
+    columns: { id: true, asanaWorkspaceId: true },
+  });
+  const workspaceCompanyIds =
+    actorCompany?.asanaWorkspaceId
+      ? (
+          await db.query.companies.findMany({
+            where: eq(companies.asanaWorkspaceId, actorCompany.asanaWorkspaceId),
+            columns: { id: true },
+          })
+        ).map((row) => row.id)
+      : [user.companyId];
   const companyUsers = await db.query.users.findMany({
-    where: eq(users.companyId, user.companyId),
+    where: inArray(users.companyId, workspaceCompanyIds),
     orderBy: (table, { asc }) => [asc(table.email)],
   });
   const companyUserStatuses = await Promise.all(

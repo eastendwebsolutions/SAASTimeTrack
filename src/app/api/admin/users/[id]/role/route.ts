@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { canReviewEntries, isSuperAdmin } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { companies, users } from "@/lib/db/schema";
 
 type AllowedManagedRole = "user" | "company_admin";
 
@@ -24,8 +24,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  if (!isSuperAdmin(actor.role) && target.companyId !== actor.companyId) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!isSuperAdmin(actor.role)) {
+    const [actorCompany, targetCompany] = await Promise.all([
+      db.query.companies.findFirst({
+        where: eq(companies.id, actor.companyId),
+        columns: { asanaWorkspaceId: true },
+      }),
+      db.query.companies.findFirst({
+        where: eq(companies.id, target.companyId),
+        columns: { asanaWorkspaceId: true },
+      }),
+    ]);
+    const sameWorkspace = Boolean(
+      actorCompany?.asanaWorkspaceId &&
+        targetCompany?.asanaWorkspaceId &&
+        actorCompany.asanaWorkspaceId === targetCompany.asanaWorkspaceId,
+    );
+    if (!sameWorkspace && target.companyId !== actor.companyId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   const formData = await request.formData();
