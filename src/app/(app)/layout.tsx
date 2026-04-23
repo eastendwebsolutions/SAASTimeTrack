@@ -15,9 +15,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         where: eq(asanaConnections.userId, user.id),
       })
     : null;
-  const latestRun = user
+  const latestSuccessfulRun = user
     ? await db.query.syncRuns.findFirst({
-        where: and(eq(syncRuns.companyId, user.companyId), eq(syncRuns.userId, user.id)),
+        where: and(eq(syncRuns.companyId, user.companyId), eq(syncRuns.userId, user.id), eq(syncRuns.status, "success")),
         orderBy: (table) => [desc(table.startedAt)],
       })
     : null;
@@ -31,7 +31,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     user && canManagePokerPlanning(user.role, Boolean(pokerWorkspaceAdminAssignment)),
   );
 
-  const latestSyncedAt = latestRun?.endedAt;
+  const latestSyncedAt = latestSuccessfulRun?.endedAt;
   const latestSyncLabel = latestSyncedAt
     ? latestSyncedAt.toLocaleString("en-US", {
         weekday: "short",
@@ -87,6 +87,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <AsanaHeaderStatus
               asanaConnected={Boolean(connection)}
               lastSyncLabel={latestSyncLabel}
+              lastSyncedAtIso={latestSyncedAt ? latestSyncedAt.toISOString() : null}
               timezone={user?.timezone ?? "UTC"}
             />
             <div className="group relative">
