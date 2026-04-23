@@ -6,8 +6,7 @@ import { canManagePokerPlanning, canReviewEntries } from "@/lib/auth/rbac";
 import { TimezoneSync } from "@/components/providers/timezone-sync";
 import { AsanaHeaderStatus } from "@/components/integrations/asana-header-status";
 import { db } from "@/lib/db";
-import { asanaConnections, jiraConnections, ppWorkspaceAdmins, syncRuns } from "@/lib/db/schema";
-import { getActiveProviderForUser } from "@/lib/integrations/provider";
+import { asanaConnections, ppWorkspaceAdmins, syncRuns } from "@/lib/db/schema";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getOrCreateCurrentUser();
@@ -16,20 +15,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         where: eq(asanaConnections.userId, user.id),
       })
     : null;
-  const jiraConnection = user
-    ? await db.query.jiraConnections.findFirst({
-        where: eq(jiraConnections.userId, user.id),
-      })
-    : null;
-  const activeProvider = user ? getActiveProviderForUser(user) : "asana";
   const latestSuccessfulRun = user
     ? await db.query.syncRuns.findFirst({
-        where: and(
-          eq(syncRuns.companyId, user.companyId),
-          eq(syncRuns.userId, user.id),
-          eq(syncRuns.status, "success"),
-          eq(syncRuns.provider, activeProvider),
-        ),
+        where: and(eq(syncRuns.companyId, user.companyId), eq(syncRuns.userId, user.id), eq(syncRuns.status, "success")),
         orderBy: (table) => [desc(table.startedAt)],
       })
     : null;
@@ -97,8 +85,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </Link>
             ) : null}
             <AsanaHeaderStatus
-              provider={activeProvider}
-              connected={activeProvider === "jira" ? Boolean(jiraConnection) : Boolean(connection)}
+              asanaConnected={Boolean(connection)}
               lastSyncLabel={latestSyncLabel}
               lastSyncedAtIso={latestSyncedAt ? latestSyncedAt.toISOString() : null}
               timezone={user?.timezone ?? "UTC"}

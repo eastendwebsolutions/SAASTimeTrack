@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { exchangeAsanaCode } from "@/lib/asana/client";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
-import { asanaConnections, users } from "@/lib/db/schema";
+import { asanaConnections } from "@/lib/db/schema";
 import { encrypt } from "@/lib/utils/crypto";
-import { eq } from "drizzle-orm";
 
 function integrationsUrl(request: NextRequest, query: Record<string, string>) {
   const url = new URL("/settings/integrations", request.url);
@@ -73,10 +72,6 @@ export async function GET(request: NextRequest) {
           expiresAt,
         },
       });
-    await db
-      .update(users)
-      .set({ activeIntegrationProvider: "asana" })
-      .where(eq(users.id, parsed.userId));
   } catch {
     return NextResponse.redirect(integrationsUrl(request, { asana_error: "save_failed" }));
   }

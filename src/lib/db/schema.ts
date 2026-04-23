@@ -22,7 +22,6 @@ export const ppRestartScopeEnum = pgEnum("pp_restart_scope", ["full", "stories"]
 export const ppParticipantRoleEnum = pgEnum("pp_participant_role", ["facilitator", "participant"]);
 export const ppStoryStatusEnum = pgEnum("pp_story_status", ["pending", "voting", "revealed", "finalized"]);
 export const ppRoundStateEnum = pgEnum("pp_round_state", ["open", "revealed", "closed"]);
-export const integrationProviderEnum = pgEnum("integration_provider", ["asana", "jira"]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -56,7 +55,6 @@ export const users = pgTable("users", {
   isPokerPlanningAdmin: boolean("is_poker_planning_admin").notNull().default(false),
   companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
   timezone: varchar("timezone", { length: 100 }),
-  activeIntegrationProvider: integrationProviderEnum("active_integration_provider").notNull().default("asana"),
   ...timestamps,
 }, (table) => ({
   companyIdx: index("users_company_idx").on(table.companyId),
@@ -67,8 +65,6 @@ export const projects = pgTable("projects", {
   companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
   /** Asana data is cached per user OAuth — no org-wide Asana install required. */
   syncedByUserId: uuid("synced_by_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  provider: integrationProviderEnum("provider").notNull().default("asana"),
-  externalProjectId: varchar("external_project_id", { length: 120 }).notNull(),
   asanaProjectId: varchar("asana_project_id", { length: 100 }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   isActive: boolean("is_active").notNull().default(true),
@@ -79,18 +75,11 @@ export const projects = pgTable("projects", {
   userActiveIdx: index("projects_user_active_idx").on(table.syncedByUserId, table.isActive),
   /** Same Asana project may appear once per user who synced it. */
   asanaProjectPerUserUnique: uniqueIndex("projects_user_asana_unique").on(table.syncedByUserId, table.asanaProjectId),
-  externalProjectPerUserUnique: uniqueIndex("projects_user_provider_external_unique").on(
-    table.syncedByUserId,
-    table.provider,
-    table.externalProjectId,
-  ),
 }));
 
 export const tasks = pgTable("tasks", {
   id: uuid("id").defaultRandom().primaryKey(),
   projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
-  provider: integrationProviderEnum("provider").notNull().default("asana"),
-  externalTaskId: varchar("external_task_id", { length: 120 }).notNull(),
   asanaTaskId: varchar("asana_task_id", { length: 100 }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   assignedUserId: uuid("assigned_user_id").references(() => users.id),
@@ -101,11 +90,6 @@ export const tasks = pgTable("tasks", {
 }, (table) => ({
   assignedIdx: index("tasks_assigned_active_idx").on(table.assignedUserId, table.isActive),
   projectAsanaUnique: uniqueIndex("tasks_project_asana_unique").on(table.projectId, table.asanaTaskId),
-  projectProviderExternalUnique: uniqueIndex("tasks_project_provider_external_unique").on(
-    table.projectId,
-    table.provider,
-    table.externalTaskId,
-  ),
 }));
 
 export const timesheets = pgTable("timesheets", {
@@ -182,25 +166,10 @@ export const asanaConnections = pgTable("asana_connections", {
   ...timestamps,
 });
 
-export const jiraConnections = pgTable("jira_connections", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
-  jiraAccountId: varchar("jira_account_id", { length: 120 }).notNull(),
-  jiraCloudId: varchar("jira_cloud_id", { length: 120 }).notNull(),
-  jiraSiteName: varchar("jira_site_name", { length: 255 }),
-  accessTokenEncrypted: text("access_token_encrypted").notNull(),
-  refreshTokenEncrypted: text("refresh_token_encrypted"),
-  expiresAt: timestamp("expires_at", { withTimezone: true }),
-  scopes: text("scopes"),
-  connectedAt: timestamp("connected_at", { withTimezone: true }).defaultNow().notNull(),
-  ...timestamps,
-});
-
 export const syncRuns = pgTable("sync_runs", {
   id: uuid("id").defaultRandom().primaryKey(),
   companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
   userId: uuid("user_id").references(() => users.id),
-  provider: integrationProviderEnum("provider").notNull().default("asana"),
   type: varchar("type", { length: 20 }).notNull(),
   status: varchar("status", { length: 20 }).notNull(),
   projectsSynced: integer("projects_synced").notNull().default(0),

@@ -1,9 +1,7 @@
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { fetchAsanaMe } from "@/lib/asana/client";
 import { db } from "@/lib/db";
-import { asanaConnections, jiraConnections, syncRuns } from "@/lib/db/schema";
-import { getActiveProviderForUser, type IntegrationProvider } from "@/lib/integrations/provider";
-import { fetchJiraMe } from "@/lib/jira/client";
+import { asanaConnections, syncRuns } from "@/lib/db/schema";
 import { decrypt } from "@/lib/utils/crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { Card } from "@/components/ui/card";
@@ -19,49 +17,23 @@ const ASANA_ERROR_MESSAGES: Record<string, string> = {
   save_failed: "Could not save the connection to the database. Try again or check server logs.",
 };
 
-const JIRA_ERROR_MESSAGES: Record<string, string> = {
-  missing_params: "Jira did not return a complete authorization response. Use Connect Jira again.",
-  invalid_state: "The connect link was invalid or expired. Open Settings -> Integrations and use Connect Jira again.",
-  user_mismatch: "You signed in as a different user than the one who started connect. Try Connect Jira again.",
-  no_site_access: "Jira token succeeded but no accessible Jira site was returned for this user.",
-  exchange_failed:
-    "Jira rejected the token or site fetch failed (redirect/client settings may be wrong). Check OAuth app settings and retry.",
-};
-
-type SearchParams = Promise<{
-  config?: string;
-  missing?: string;
-  asana_error?: string;
-  asana_connected?: string;
-  jira_error?: string;
-  jira_connected?: string;
-}>;
+type SearchParams = Promise<{ config?: string; missing?: string; asana_error?: string; asana_connected?: string }>;
 
 export default async function IntegrationsPage({ searchParams }: { searchParams?: SearchParams }) {
   const user = await getOrCreateCurrentUser();
   if (!user) return null;
-  const currentUser = user;
 
   const params = searchParams ? await searchParams : {};
   const showAsanaConfigHelp = params.config === "asana";
-  const showJiraConfigHelp = params.config === "jira";
   const missingKeys = params.missing?.split(",").filter(Boolean) ?? [];
   const asanaErrorCode = params.asana_error?.trim();
   const asanaErrorMessage = asanaErrorCode ? ASANA_ERROR_MESSAGES[asanaErrorCode] ?? `Something went wrong (${asanaErrorCode}).` : null;
-  const jiraErrorCode = params.jira_error?.trim();
-  const jiraErrorMessage = jiraErrorCode ? JIRA_ERROR_MESSAGES[jiraErrorCode] ?? `Something went wrong (${jiraErrorCode}).` : null;
   const triggerInitialSync = params.asana_connected === "1";
-  const triggerJiraInitialSync = params.jira_connected === "1";
   const appBase = (process.env.NEXT_PUBLIC_APP_URL ?? "https://your-production-domain").replace(/\/$/, "");
   const asanaCallbackExample = `${appBase}/api/asana/callback`;
-  const jiraCallbackExample = `${appBase}/api/jira/callback`;
-  const activeProvider = getActiveProviderForUser(currentUser);
 
   const connection = await db.query.asanaConnections.findFirst({
     where: eq(asanaConnections.userId, user.id),
-  });
-  const jiraConnection = await db.query.jiraConnections.findFirst({
-    where: eq(jiraConnections.userId, user.id),
   });
 
   let asanaMe: Awaited<ReturnType<typeof fetchAsanaMe>> | null = null;
@@ -72,26 +44,11 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
       asanaMe = null;
     }
   }
-  let jiraMe: Awaited<ReturnType<typeof fetchJiraMe>> | null = null;
-  if (jiraConnection) {
-    try {
-      jiraMe = await fetchJiraMe(jiraConnection.jiraCloudId, decrypt(jiraConnection.accessTokenEncrypted));
-    } catch {
-      jiraMe = null;
-    }
-  }
 
-  async function latestRunForProvider(provider: IntegrationProvider) {
-    return db.query.syncRuns.findFirst({
-      where: and(
-        eq(syncRuns.companyId, currentUser.companyId),
-        eq(syncRuns.userId, currentUser.id),
-        eq(syncRuns.provider, provider),
-      ),
-      orderBy: (table) => [desc(table.startedAt)],
-    });
-  }
-  const [asanaLatestRun, jiraLatestRun] = await Promise.all([latestRunForProvider("asana"), latestRunForProvider("jira")]);
+  const latestRun = await db.query.syncRuns.findFirst({
+    where: and(eq(syncRuns.companyId, user.companyId), eq(syncRuns.userId, user.id)),
+    orderBy: (table) => [desc(table.startedAt)],
+  });
 
   return (
     <div className="space-y-6">
@@ -130,53 +87,6 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
           <p className="mt-3 text-xs text-amber-300/80">Save variables, then redeploy the project. After that, use Connect Asana again.</p>
         </Card>
       ) : null}
-      {jiraErrorMessage ? (
-        <Card className="border border-rose-900/80 bg-rose-950/40 p-4 text-sm text-rose-100">
-          <p className="font-medium text-rose-50">Jira connect did not finish</p>
-          <p className="mt-2 text-rose-200/90">{jiraErrorMessage}</p>
-        </Card>
-      ) : null}
-      {showJiraConfigHelp ? (
-        <Card className="border border-amber-800/80 bg-amber-950/40 p-4 text-sm text-amber-100">
-          <p className="font-medium text-amber-50">Jira OAuth is not configured on the server</p>
-          <ul className="mt-2 list-inside list-disc text-amber-200/90">
-            <li>
-              <code className="text-amber-100">JIRA_CLIENT_ID</code>, <code className="text-amber-100">JIRA_CLIENT_SECRET</code>
-            </li>
-            <li>
-              <code className="text-amber-100">JIRA_REDIRECT_URI</code> should match{" "}
-              <code className="break-all text-amber-100">{jiraCallbackExample}</code>
-            </li>
-            <li>
-              <code className="text-amber-100">ENCRYPTION_KEY</code> should be at least 32 characters
-            </li>
-          </ul>
-          {missingKeys.length > 0 ? (
-            <p className="mt-2 text-xs text-amber-300/90">Detected missing or invalid: {missingKeys.join(", ")}</p>
-          ) : null}
-        </Card>
-      ) : null}
-      <Card className="p-5">
-        <h2 className="mb-2 font-medium">Active Project Integration</h2>
-        <p className="mb-3 text-sm text-zinc-400">
-          Only one provider is active at a time for sync + time entry. Switch after both providers are connected.
-        </p>
-        <div className="flex items-center gap-2">
-          <form action="/api/integrations/active-provider" method="post">
-            <input type="hidden" name="provider" value="asana" />
-            <Button type="submit" variant={activeProvider === "asana" ? "primary" : "secondary"} disabled={!connection}>
-              Use Asana
-            </Button>
-          </form>
-          <form action="/api/integrations/active-provider" method="post">
-            <input type="hidden" name="provider" value="jira" />
-            <Button type="submit" variant={activeProvider === "jira" ? "primary" : "secondary"} disabled={!jiraConnection}>
-              Use Jira
-            </Button>
-          </form>
-          <span className="text-xs text-zinc-500">Current: {activeProvider === "asana" ? "Asana" : "Jira"}</span>
-        </div>
-      </Card>
       <Card className="p-5">
         <h2 className="mb-2 font-medium">Asana</h2>
         <p className="mb-4 text-sm text-zinc-400">
@@ -225,75 +135,17 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
         </a>
         <AsanaSyncPanel
           connected={Boolean(connection)}
-          providerLabel="Asana"
-          syncInitialPath="/api/asana/sync/initial"
-          syncStatusPath="/api/asana/sync/status"
           triggerInitialSync={triggerInitialSync}
           initialRun={
-            asanaLatestRun
+            latestRun
               ? {
-                  status: asanaLatestRun.status,
-                  startedAt: asanaLatestRun.startedAt.toISOString(),
-                  endedAt: asanaLatestRun.endedAt?.toISOString() ?? null,
-                  error: asanaLatestRun.error ?? null,
-                  projectsSynced: asanaLatestRun.projectsSynced,
-                  tasksSynced: asanaLatestRun.tasksSynced,
-                  subtasksSynced: asanaLatestRun.subtasksSynced,
-                }
-              : null
-          }
-        />
-      </Card>
-      <Card className="p-5">
-        <h2 className="mb-2 font-medium">Jira</h2>
-        <p className="mb-4 text-sm text-zinc-400">
-          {jiraConnection ? "Connected" : "Not connected"}. Jira follows the same OAuth pattern as Asana and can be the active provider.
-        </p>
-        {jiraConnection ? (
-          <div className="mb-4 rounded-md border border-zinc-800 bg-zinc-950/60 px-3 py-3 text-sm text-zinc-300">
-            <p className="font-medium text-zinc-100">Identity check</p>
-            <ul className="mt-2 list-inside list-disc space-y-1 text-zinc-400">
-              <li>
-                <span className="text-zinc-500">SAASTimeTrack profile:</span>{" "}
-                <span className="text-zinc-100">{user.email}</span>
-              </li>
-              <li>
-                <span className="text-zinc-500">Jira account linked:</span>{" "}
-                {jiraMe ? (
-                  <span className="text-zinc-100">
-                    {jiraMe.displayName}
-                    {jiraMe.emailAddress ? ` · ${jiraMe.emailAddress}` : ""}
-                  </span>
-                ) : (
-                  <span className="text-amber-200/90">Could not load (token may be expired). Use Reconnect Jira.</span>
-                )}
-              </li>
-              <li>
-                <span className="text-zinc-500">Jira site:</span>{" "}
-                <span className="text-zinc-100">{jiraConnection.jiraSiteName ?? jiraConnection.jiraCloudId}</span>
-              </li>
-            </ul>
-          </div>
-        ) : null}
-        <a href="/api/jira/connect/url">
-          <Button>{jiraConnection ? "Reconnect Jira" : "Connect Jira"}</Button>
-        </a>
-        <AsanaSyncPanel
-          connected={Boolean(jiraConnection)}
-          providerLabel="Jira"
-          syncInitialPath="/api/jira/sync/initial"
-          syncStatusPath="/api/jira/sync/status"
-          triggerInitialSync={triggerJiraInitialSync}
-          initialRun={
-            jiraLatestRun
-              ? {
-                  status: jiraLatestRun.status,
-                  startedAt: jiraLatestRun.startedAt.toISOString(),
-                  endedAt: jiraLatestRun.endedAt?.toISOString() ?? null,
-                  error: jiraLatestRun.error ?? null,
-                  projectsSynced: jiraLatestRun.projectsSynced,
-                  tasksSynced: jiraLatestRun.tasksSynced,
-                  subtasksSynced: jiraLatestRun.subtasksSynced,
+                  status: latestRun.status,
+                  startedAt: latestRun.startedAt.toISOString(),
+                  endedAt: latestRun.endedAt?.toISOString() ?? null,
+                  error: latestRun.error ?? null,
+                  projectsSynced: latestRun.projectsSynced,
+                  tasksSynced: latestRun.tasksSynced,
+                  subtasksSynced: latestRun.subtasksSynced,
                 }
               : null
           }
