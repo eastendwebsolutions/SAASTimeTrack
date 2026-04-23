@@ -53,11 +53,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               SaaSTimeTrack
             </Link>
             <nav className="flex items-center gap-4 text-sm text-zinc-300">
-              <Link href="/time">Time</Link>
-              <Link href="/timesheet">Timesheet</Link>
-              <Link href="/timesheet/archive">Archive</Link>
-              <Link href="/settings/integrations">Integrations</Link>
-              <Link href="/settings/profile">Profile</Link>
+              <Link href="/time">Time Entry</Link>
+              <div className="group relative">
+                <Link href="/timesheet" className="inline-flex items-center gap-1">
+                  Timesheet
+                  <span className="text-xs text-zinc-500">▾</span>
+                </Link>
+                <div className="invisible absolute left-0 top-full z-20 mt-2 min-w-40 rounded-md border border-zinc-800 bg-zinc-950/95 p-1 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
+                  <Link href="/timesheet/archive" className="block rounded px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
+                    Archive
+                  </Link>
+                </div>
+              </div>
             </nav>
           </div>
           <div className="flex items-center gap-3">
@@ -82,7 +89,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               lastSyncLabel={latestSyncLabel}
               timezone={user?.timezone ?? "UTC"}
             />
-            <UserButton />
+            <div className="group relative">
+              <UserButton />
+              <div className="invisible absolute right-0 top-full z-20 mt-2 min-w-44 rounded-md border border-zinc-800 bg-zinc-950/95 p-1 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
+                <Link href="/settings/profile" className="block rounded px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
+                  Profile
+                </Link>
+                <Link href="/settings/integrations" className="block rounded px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
+                  Integrations
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </header>
