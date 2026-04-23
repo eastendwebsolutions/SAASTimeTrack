@@ -12,6 +12,10 @@ const envSchema = z.object({
   JIRA_CLIENT_SECRET: z.string().optional(),
   JIRA_REDIRECT_URI: z.string().url().optional(),
   JIRA_FEATURE_ENABLED: z.enum(["0", "1"]).optional(),
+  MONDAY_CLIENT_ID: z.string().optional(),
+  MONDAY_CLIENT_SECRET: z.string().optional(),
+  MONDAY_REDIRECT_URI: z.string().url().optional(),
+  MONDAY_FEATURE_ENABLED: z.enum(["0", "1"]).optional(),
   ENCRYPTION_KEY: z.string().min(32),
 });
 
@@ -35,6 +39,10 @@ export function getEnv(): Env {
     JIRA_CLIENT_SECRET: process.env.JIRA_CLIENT_SECRET,
     JIRA_REDIRECT_URI: process.env.JIRA_REDIRECT_URI,
     JIRA_FEATURE_ENABLED: process.env.JIRA_FEATURE_ENABLED,
+    MONDAY_CLIENT_ID: process.env.MONDAY_CLIENT_ID,
+    MONDAY_CLIENT_SECRET: process.env.MONDAY_CLIENT_SECRET,
+    MONDAY_REDIRECT_URI: process.env.MONDAY_REDIRECT_URI,
+    MONDAY_FEATURE_ENABLED: process.env.MONDAY_FEATURE_ENABLED,
     ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
   });
 

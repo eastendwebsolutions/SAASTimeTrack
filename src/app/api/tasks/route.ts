@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
     where: and(
       eq(projects.companyId, user.companyId),
       eq(projects.syncedByUserId, user.id),
+      eq(projects.provider, user.activeIntegrationProvider),
       eq(projects.isActive, true),
     ),
     columns: { id: true },

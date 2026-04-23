@@ -1,7 +1,7 @@
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { fetchAsanaMe } from "@/lib/asana/client";
 import { db } from "@/lib/db";
-import { asanaConnections, jiraConnections, syncRuns } from "@/lib/db/schema";
+import { asanaConnections, jiraConnections, mondayConnections, syncRuns } from "@/lib/db/schema";
 import { decrypt } from "@/lib/utils/crypto";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { Card } from "@/components/ui/card";
@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { AsanaSyncPanel } from "@/components/integrations/asana-sync-panel";
 import { getJiraReadiness } from "@/lib/integrations/jira-readiness";
 import { IntegrationLabel } from "@/components/integrations/integration-label";
+import { getMondayReadiness } from "@/lib/integrations/monday-readiness";
+import { getActiveProviderForUser } from "@/lib/integrations/provider";
 
 const ASANA_ERROR_MESSAGES: Record<string, string> = {
   missing_params: "Asana did not return a complete authorization response. Use Connect Asana again.",
@@ -30,6 +32,16 @@ const JIRA_ERROR_MESSAGES: Record<string, string> = {
   env_invalid: "Jira environment settings are invalid.",
 };
 
+const MONDAY_ERROR_MESSAGES: Record<string, string> = {
+  missing_params: "Monday did not return a complete authorization response. Use Connect Monday again.",
+  invalid_state: "The connect link was invalid or expired. Open Settings -> Integrations and use Connect Monday again.",
+  user_mismatch: "You signed in as a different user than the one who started connect. Try Connect Monday again.",
+  exchange_failed: "Monday token exchange failed. Verify Monday OAuth app settings and retry.",
+  not_enabled: "Monday is currently gated. Enable schema + feature flag before connecting.",
+  schema_not_ready: "Monday DB schema is not ready yet. Apply migration first, then connect.",
+  env_invalid: "Monday environment settings are invalid.",
+};
+
 type SearchParams = Promise<{
   config?: string;
   missing?: string;
@@ -37,6 +49,10 @@ type SearchParams = Promise<{
   asana_connected?: string;
   jira_error?: string;
   jira_connected?: string;
+  monday_error?: string;
+  monday_connected?: string;
+  provider_error?: string;
+  provider_switched?: string;
 }>;
 
 export default async function IntegrationsPage({ searchParams }: { searchParams?: SearchParams }) {
@@ -46,6 +62,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
   const params = searchParams ? await searchParams : {};
   const showAsanaConfigHelp = params.config === "asana";
   const showJiraConfigHelp = params.config === "jira";
+  const showMondayConfigHelp = params.config === "monday";
   const missingKeys = params.missing?.split(",").filter(Boolean) ?? [];
   const asanaErrorCode = params.asana_error?.trim();
   const asanaErrorMessage = asanaErrorCode ? ASANA_ERROR_MESSAGES[asanaErrorCode] ?? `Something went wrong (${asanaErrorCode}).` : null;
@@ -54,10 +71,16 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
   const triggerInitialSync = params.asana_connected === "1";
   const jiraConnectedNow = params.jira_connected === "1";
   const triggerJiraInitialSync = jiraConnectedNow;
+  const mondayErrorCode = params.monday_error?.trim();
+  const mondayErrorMessage = mondayErrorCode ? MONDAY_ERROR_MESSAGES[mondayErrorCode] ?? `Something went wrong (${mondayErrorCode}).` : null;
+  const mondayConnectedNow = params.monday_connected === "1";
+  const triggerMondayInitialSync = mondayConnectedNow;
   const appBase = (process.env.NEXT_PUBLIC_APP_URL ?? "https://your-production-domain").replace(/\/$/, "");
   const asanaCallbackExample = `${appBase}/api/asana/callback`;
   const jiraCallbackExample = `${appBase}/api/jira/callback`;
   const jiraReadiness = await getJiraReadiness();
+  const mondayReadiness = await getMondayReadiness();
+  const activeProvider = await getActiveProviderForUser(user.id);
 
   const connection = await db.query.asanaConnections.findFirst({
     where: eq(asanaConnections.userId, user.id),
@@ -65,6 +88,11 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
   const jiraConnection = jiraReadiness.schemaReady
     ? await db.query.jiraConnections.findFirst({
         where: eq(jiraConnections.userId, user.id),
+      })
+    : null;
+  const mondayConnection = mondayReadiness.schemaReady
+    ? await db.query.mondayConnections.findFirst({
+        where: eq(mondayConnections.userId, user.id),
       })
     : null;
 
@@ -91,6 +119,16 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
           eq(syncRuns.companyId, user.companyId),
           eq(syncRuns.userId, user.id),
           inArray(syncRuns.type, ["jira_initial", "jira_periodic", "jira_manual"]),
+        ),
+        orderBy: (table) => [desc(table.startedAt)],
+      })
+    : null;
+  const latestMondayRun = mondayReadiness.schemaReady
+    ? await db.query.syncRuns.findFirst({
+        where: and(
+          eq(syncRuns.companyId, user.companyId),
+          eq(syncRuns.userId, user.id),
+          inArray(syncRuns.type, ["monday_initial", "monday_periodic", "monday_manual"]),
         ),
         orderBy: (table) => [desc(table.startedAt)],
       })
@@ -156,6 +194,46 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
           <p className="mt-2 text-xs text-amber-300/80">Apply migration, set env vars, and enable feature flag before connecting.</p>
         </Card>
       ) : null}
+      {mondayErrorMessage ? (
+        <Card className="border border-rose-900/80 bg-rose-950/40 p-4 text-sm text-rose-100">
+          <p className="font-medium text-rose-50">
+            <IntegrationLabel integration="monday" text="Monday connect did not finish" />
+          </p>
+          <p className="mt-2 text-rose-200/90">{mondayErrorMessage}</p>
+        </Card>
+      ) : null}
+      {showMondayConfigHelp ? (
+        <Card className="border border-amber-800/80 bg-amber-950/40 p-4 text-sm text-amber-100">
+          <p className="font-medium text-amber-50">
+            <IntegrationLabel integration="monday" text="Monday rollout prerequisites are not complete" />
+          </p>
+          {missingKeys.length > 0 ? (
+            <p className="mt-2 text-xs text-amber-300/90">Missing or invalid: {missingKeys.join(", ")}</p>
+          ) : null}
+          <p className="mt-2 text-xs text-amber-300/80">Apply migration, set env vars, and enable feature flag before connecting.</p>
+        </Card>
+      ) : null}
+      <Card className="p-5">
+        <h2 className="mb-2 font-medium">Active Project Integration</h2>
+        <p className="mb-4 text-sm text-zinc-400">Select which connected provider should power project/task data in Time Entry and Timesheet.</p>
+        <div className="flex flex-wrap gap-2">
+          <a href="/api/integrations/active-provider?provider=asana&redirect=/settings/integrations">
+            <Button variant={activeProvider === "asana" ? "primary" : "secondary"} disabled={!connection}>
+              <IntegrationLabel integration="asana" text={activeProvider === "asana" ? "Asana (Active)" : "Use Asana"} />
+            </Button>
+          </a>
+          <a href="/api/integrations/active-provider?provider=jira&redirect=/settings/integrations">
+            <Button variant={activeProvider === "jira" ? "primary" : "secondary"} disabled={!jiraConnection}>
+              <IntegrationLabel integration="jira" text={activeProvider === "jira" ? "Jira (Active)" : "Use Jira"} />
+            </Button>
+          </a>
+          <a href="/api/integrations/active-provider?provider=monday&redirect=/settings/integrations">
+            <Button variant={activeProvider === "monday" ? "primary" : "secondary"} disabled={!mondayConnection}>
+              <IntegrationLabel integration="monday" text={activeProvider === "monday" ? "Monday (Active)" : "Use Monday"} />
+            </Button>
+          </a>
+        </div>
+      </Card>
       <Card className="p-5">
         <h2 className="mb-2 font-medium">
           <IntegrationLabel integration="asana" text="Asana" />
@@ -288,6 +366,73 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
                     projectsSynced: latestJiraRun.projectsSynced,
                     tasksSynced: latestJiraRun.tasksSynced,
                     subtasksSynced: latestJiraRun.subtasksSynced,
+                  }
+                : null
+            }
+          />
+        </div>
+      </Card>
+      <Card className="p-5">
+        <h2 className="mb-2 font-medium">
+          <IntegrationLabel integration="monday" text="Monday (Safe Rollout)" />
+        </h2>
+        <p className="mb-4 text-sm text-zinc-400">
+          Monday is being introduced with outage-safe gating. It will only activate after database migration and feature flag checks pass.
+        </p>
+        <div className="rounded-md border border-zinc-800 bg-zinc-950/60 p-3 text-sm text-zinc-300">
+          <p>
+            Environment configured:{" "}
+            <span className={mondayReadiness.envReady ? "text-emerald-400" : "text-amber-300"}>
+              {mondayReadiness.envReady ? "Ready" : "Pending"}
+            </span>
+          </p>
+          <p>
+            Database migration applied:{" "}
+            <span className={mondayReadiness.schemaReady ? "text-emerald-400" : "text-amber-300"}>
+              {mondayReadiness.schemaReady ? "Ready" : "Pending"}
+            </span>
+          </p>
+          <p>
+            Feature flag enabled:{" "}
+            <span className={mondayReadiness.featureEnabled ? "text-emerald-400" : "text-amber-300"}>
+              {mondayReadiness.featureEnabled ? "Ready" : "Pending"}
+            </span>
+          </p>
+          {!mondayReadiness.fullyReady ? (
+            <p className="mt-2 text-xs text-amber-300">
+              Monday connect/sync endpoints remain disabled until all checks are ready.
+            </p>
+          ) : null}
+          {mondayConnectedNow ? <p className="mt-2 text-xs text-emerald-300">Monday connected successfully.</p> : null}
+          <div className="mt-3">
+            {mondayReadiness.fullyReady ? (
+              <a href="/api/monday/connect/url">
+                <Button variant="secondary">
+                  <IntegrationLabel integration="monday" text={mondayConnection ? "Reconnect Monday" : "Connect Monday"} />
+                </Button>
+              </a>
+            ) : (
+              <Button variant="secondary" disabled>
+                <IntegrationLabel integration="monday" text="Connect Monday (locked until ready)" />
+              </Button>
+            )}
+          </div>
+          <AsanaSyncPanel
+            providerLabel="Monday"
+            initialSyncPath="/api/monday/sync/initial"
+            statusPath="/api/monday/sync/status"
+            connected={Boolean(mondayConnection)}
+            triggerInitialSync={triggerMondayInitialSync}
+            initialRun={
+              latestMondayRun
+                ? {
+                    status: latestMondayRun.status,
+                    startedAt: latestMondayRun.startedAt.toISOString(),
+                    endedAt: latestMondayRun.endedAt?.toISOString() ?? null,
+                    error: latestMondayRun.error ?? null,
+                    projectsSynced: latestMondayRun.projectsSynced,
+                    tasksSynced: latestMondayRun.tasksSynced,
+                    subtasksSynced: latestMondayRun.subtasksSynced,
                   }
                 : null
             }

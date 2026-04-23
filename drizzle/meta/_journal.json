@@ -57,6 +57,13 @@
       "when": 1776987600000,
       "tag": "0007_jira_safe_rollout_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1777411200000,
+      "tag": "0008_monday_safe_rollout_foundation",
+      "breakpoints": true
     }
   ]
 }

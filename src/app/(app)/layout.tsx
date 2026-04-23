@@ -1,23 +1,44 @@
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { canReviewEntries } from "@/lib/auth/rbac";
 import { TimezoneSync } from "@/components/providers/timezone-sync";
 import { AsanaHeaderStatus } from "@/components/integrations/asana-header-status";
 import { db } from "@/lib/db";
-import { asanaConnections, syncRuns } from "@/lib/db/schema";
+import { asanaConnections, jiraConnections, mondayConnections, syncRuns } from "@/lib/db/schema";
+import { getActiveProviderForUser } from "@/lib/integrations/provider";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getOrCreateCurrentUser();
-  const connection = user
+  const asanaConnection = user
     ? await db.query.asanaConnections.findFirst({
         where: eq(asanaConnections.userId, user.id),
       })
     : null;
+  const jiraConnection = user
+    ? await db.query.jiraConnections.findFirst({
+        where: eq(jiraConnections.userId, user.id),
+      })
+    : null;
+  const mondayConnection = user
+    ? await db.query.mondayConnections.findFirst({
+        where: eq(mondayConnections.userId, user.id),
+      })
+    : null;
+  const activeProvider = user ? await getActiveProviderForUser(user.id) : "asana";
   const latestSuccessfulRun = user
     ? await db.query.syncRuns.findFirst({
-        where: and(eq(syncRuns.companyId, user.companyId), eq(syncRuns.userId, user.id), eq(syncRuns.status, "success")),
+        where: and(
+          eq(syncRuns.companyId, user.companyId),
+          eq(syncRuns.userId, user.id),
+          eq(syncRuns.status, "success"),
+          activeProvider === "asana"
+            ? inArray(syncRuns.type, ["initial", "periodic", "manual"])
+            : activeProvider === "jira"
+              ? inArray(syncRuns.type, ["jira_initial", "jira_periodic", "jira_manual"])
+              : inArray(syncRuns.type, ["monday_initial", "monday_periodic", "monday_manual"]),
+        ),
         orderBy: (table) => [desc(table.startedAt)],
       })
     : null;
@@ -78,7 +99,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </Link>
             ) : null}
             <AsanaHeaderStatus
-              asanaConnected={Boolean(connection)}
+              provider={activeProvider}
+              connected={
+                activeProvider === "asana"
+                  ? Boolean(asanaConnection)
+                  : activeProvider === "jira"
+                    ? Boolean(jiraConnection)
+                    : Boolean(mondayConnection)
+              }
               lastSyncLabel={latestSyncLabel}
               lastSyncedAtIso={latestSyncedAt ? latestSyncedAt.toISOString() : null}
               timezone={user?.timezone ?? "UTC"}

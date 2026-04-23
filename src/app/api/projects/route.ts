@@ -12,6 +12,7 @@ export async function GET() {
     where: and(
       eq(projects.companyId, user.companyId),
       eq(projects.syncedByUserId, user.id),
+      eq(projects.provider, user.activeIntegrationProvider),
       eq(projects.isActive, true),
     ),
     orderBy: (table, { asc }) => [asc(table.name)],

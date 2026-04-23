@@ -22,6 +22,7 @@ export const ppRestartScopeEnum = pgEnum("pp_restart_scope", ["full", "stories"]
 export const ppParticipantRoleEnum = pgEnum("pp_participant_role", ["facilitator", "participant"]);
 export const ppStoryStatusEnum = pgEnum("pp_story_status", ["pending", "voting", "revealed", "finalized"]);
 export const ppRoundStateEnum = pgEnum("pp_round_state", ["open", "revealed", "closed"]);
+export const integrationProviderEnum = pgEnum("integration_provider", ["asana", "jira", "monday"]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -52,6 +53,7 @@ export const users = pgTable("users", {
   email: varchar("email", { length: 255 }).notNull(),
   asanaUserId: varchar("asana_user_id", { length: 100 }),
   role: roleEnum("role").notNull().default("user"),
+  activeIntegrationProvider: integrationProviderEnum("active_integration_provider").notNull().default("asana"),
   isPokerPlanningAdmin: boolean("is_poker_planning_admin").notNull().default(false),
   companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
   timezone: varchar("timezone", { length: 100 }),
@@ -65,6 +67,7 @@ export const projects = pgTable("projects", {
   companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
   /** Asana data is cached per user OAuth — no org-wide Asana install required. */
   syncedByUserId: uuid("synced_by_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  provider: integrationProviderEnum("provider").notNull().default("asana"),
   asanaProjectId: varchar("asana_project_id", { length: 100 }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   isActive: boolean("is_active").notNull().default(true),
@@ -172,6 +175,20 @@ export const jiraConnections = pgTable("jira_connections", {
   jiraAccountId: varchar("jira_account_id", { length: 120 }).notNull(),
   jiraCloudId: varchar("jira_cloud_id", { length: 120 }).notNull(),
   jiraSiteName: varchar("jira_site_name", { length: 255 }),
+  accessTokenEncrypted: text("access_token_encrypted").notNull(),
+  refreshTokenEncrypted: text("refresh_token_encrypted"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  scopes: text("scopes"),
+  connectedAt: timestamp("connected_at", { withTimezone: true }).defaultNow().notNull(),
+  ...timestamps,
+});
+
+export const mondayConnections = pgTable("monday_connections", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+  mondayUserId: varchar("monday_user_id", { length: 120 }).notNull(),
+  mondayAccountId: varchar("monday_account_id", { length: 120 }),
+  mondayAccountSlug: varchar("monday_account_slug", { length: 255 }),
   accessTokenEncrypted: text("access_token_encrypted").notNull(),
   refreshTokenEncrypted: text("refresh_token_encrypted"),
   expiresAt: timestamp("expires_at", { withTimezone: true }),

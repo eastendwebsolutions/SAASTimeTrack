@@ -1,9 +1,10 @@
-type KnownIntegration = "asana" | "jira";
+type KnownIntegration = "asana" | "jira" | "monday";
 
 function normalizeIntegration(value: string): KnownIntegration | "other" {
   const normalized = value.trim().toLowerCase();
   if (normalized === "asana") return "asana";
   if (normalized === "jira") return "jira";
+  if (normalized === "monday" || normalized === "monday.com") return "monday";
   return "other";
 }
 
@@ -40,6 +41,16 @@ export function IntegrationLogo({ integration, className = "h-4 w-4" }: LogoProp
         </defs>
         <path d="M4 12 10.2 5.8l3.2 3.2L10.4 12l3 3L10.2 18.2Z" fill="url(#jiraGradientA)" />
         <path d="M10.2 12 16.5 5.8l3.2 3.2-6.3 6.3Z" fill="url(#jiraGradientB)" />
+      </svg>
+    );
+  }
+
+  if (kind === "monday") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
+        <circle cx="6.5" cy="12.5" r="2.7" fill="#FF3D57" />
+        <circle cx="12.1" cy="12.5" r="2.7" fill="#FFCB00" />
+        <circle cx="17.7" cy="12.5" r="2.7" fill="#0085FF" />
       </svg>
     );
   }

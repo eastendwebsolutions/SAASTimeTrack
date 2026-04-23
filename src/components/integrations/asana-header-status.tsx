@@ -10,7 +10,8 @@ import { IntegrationLabel } from "@/components/integrations/integration-label";
 const SYNC_REMINDER_INTERVAL_MS = 8 * 60 * 60 * 1000;
 
 type Props = {
-  asanaConnected: boolean;
+  provider: "asana" | "jira" | "monday";
+  connected: boolean;
   lastSyncLabel: string;
   lastSyncedAtIso: string | null;
   timezone: string;
@@ -20,7 +21,7 @@ function getReminderKey(userId: string) {
   return `saastimetrack:asana-sync-reminder:last-prompt:${userId}`;
 }
 
-export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, lastSyncedAtIso, timezone }: Props) {
+export function AsanaHeaderStatus({ provider, connected, lastSyncLabel, lastSyncedAtIso, timezone }: Props) {
   const { userId } = useAuth();
   const router = useRouter();
   const [isSyncing, setIsSyncing] = useState(false);
@@ -31,7 +32,7 @@ export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, lastSyncedAtI
     setMessage(null);
     setIsSyncing(true);
     try {
-      const response = await fetch("/api/asana/sync/initial", { method: "POST" });
+      const response = await fetch(`/api/${provider}/sync/initial`, { method: "POST" });
       const data = (await response.json().catch(() => ({}))) as {
         ok?: boolean;
         debugBuild?: string;
@@ -52,7 +53,7 @@ export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, lastSyncedAtI
         setMessage(data.details || data.error || "Sync failed.");
         return;
       }
-      if (data.summary?.diagnostics || data.debugBuild) {
+      if (provider === "asana" && (data.summary?.diagnostics || data.debugBuild)) {
         setMessage(
           `${data.debugBuild ? `Build: ${data.debugBuild}` : ""}${data.debugBuild && data.summary?.diagnostics ? " | " : ""}${data.summary?.diagnostics ? `Debug: assigned(workspace) ${data.summary.diagnostics.workspaceAssignedFetched}, candidates ${data.summary.diagnostics.assignedSubtasksCandidate}, resolved ${data.summary.diagnostics.assignedSubtasksResolvedToProject}` : ""}`,
         );
@@ -71,7 +72,7 @@ export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, lastSyncedAtI
   }, [lastSyncedAtIso]);
 
   useEffect(() => {
-    if (!userId || !asanaConnected) return;
+    if (!userId || provider !== "asana" || !connected) return;
 
     const reminderKey = getReminderKey(userId);
 
@@ -92,7 +93,7 @@ export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, lastSyncedAtI
     evaluateReminder();
     const timer = window.setInterval(evaluateReminder, 60_000);
     return () => window.clearInterval(timer);
-  }, [asanaConnected, lastSyncedAtMs, userId]);
+  }, [connected, lastSyncedAtMs, provider, userId]);
 
   function remindLater() {
     if (userId) {
@@ -112,16 +113,12 @@ export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, lastSyncedAtI
     <>
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-300">
         <p className="font-medium text-zinc-100">
-          <IntegrationLabel
-            integration="asana"
-            text={`Asana: ${asanaConnected ? "Connected" : "Not Connected"}`}
-            className="inline-flex items-center gap-1.5"
-          />
+          <IntegrationLabel integration={provider} text={`${provider[0].toUpperCase()}${provider.slice(1)}: ${connected ? "Connected" : "Not Connected"}`} className="inline-flex items-center gap-1.5" />
         </p>
         <p>Last sync: {lastSyncLabel}</p>
         <p>Timezone: {timezone}</p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          {asanaConnected ? (
+          {connected ? (
             <Button
               type="button"
               variant="secondary"
@@ -129,20 +126,20 @@ export function AsanaHeaderStatus({ asanaConnected, lastSyncLabel, lastSyncedAtI
               disabled={isSyncing}
               onClick={() => void syncNow()}
             >
-              <IntegrationLabel integration="asana" text={isSyncing ? "Syncing..." : "Sync Asana"} />
+              <IntegrationLabel integration={provider} text={isSyncing ? "Syncing..." : `Sync ${provider[0].toUpperCase()}${provider.slice(1)}`} />
             </Button>
           ) : (
             <Link
               href="/settings/integrations"
               className="inline-flex rounded-md bg-zinc-800 px-2 py-1 text-xs font-medium text-zinc-100 transition hover:bg-zinc-700"
             >
-              <IntegrationLabel integration="asana" text="Connect Asana" />
+              <IntegrationLabel integration={provider} text={`Connect ${provider[0].toUpperCase()}${provider.slice(1)}`} />
             </Link>
           )}
         </div>
         {message ? <p className="mt-1 text-[11px] text-rose-400">{message}</p> : null}
       </div>
-      {showReminder ? (
+      {provider === "asana" && showReminder ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
           <div className="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
             <h2 className="text-lg font-semibold text-zinc-100">

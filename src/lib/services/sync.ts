@@ -1,8 +1,9 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { asanaFetch, refreshAsanaAccessToken } from "@/lib/asana/client";
 import { db } from "@/lib/db";
-import { asanaConnections, companies, jiraConnections, projects, syncRuns, tasks, users } from "@/lib/db/schema";
+import { asanaConnections, companies, jiraConnections, mondayConnections, projects, syncRuns, tasks, users } from "@/lib/db/schema";
 import { jiraRequest, refreshJiraAccessToken } from "@/lib/jira/client";
+import { fetchMondayMe, mondayGraphqlRequest, refreshMondayAccessToken } from "@/lib/monday/client";
 import { decrypt, encrypt } from "@/lib/utils/crypto";
 
 type AsanaWorkspacesResponse = { data: Array<{ gid: string; name: string }> };
@@ -282,12 +283,15 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
     const staleProjectRows = await db
       .select({ id: projects.id })
       .from(projects)
-      .where(eq(projects.syncedByUserId, userId));
+      .where(and(eq(projects.syncedByUserId, userId), eq(projects.provider, "asana")));
     const staleProjectIds = staleProjectRows.map((row) => row.id);
     if (staleProjectIds.length > 0) {
       await db.update(tasks).set({ isActive: false }).where(inArray(tasks.projectId, staleProjectIds));
     }
-    await db.update(projects).set({ isActive: false }).where(eq(projects.syncedByUserId, userId));
+    await db
+      .update(projects)
+      .set({ isActive: false })
+      .where(and(eq(projects.syncedByUserId, userId), eq(projects.provider, "asana")));
 
     for (const workspace of workspaces.data) {
       const workspaceProjects = await fetchWorkspaceProjectsPaginatedWithAuth(
@@ -367,6 +371,7 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
           .values({
             companyId: user.companyId,
             syncedByUserId: userId,
+            provider: "asana",
             asanaProjectId: project.gid,
             name: truncateName(project.name),
             lastSyncedAt: new Date(),
@@ -374,6 +379,7 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
           .onConflictDoUpdate({
             target: [projects.syncedByUserId, projects.asanaProjectId],
             set: {
+              provider: "asana",
               name: truncateName(project.name),
               lastSyncedAt: new Date(),
               isActive: true,
@@ -606,12 +612,10 @@ export async function syncUserJiraData(userId: string, type: "initial" | "period
     }
 
     const staleJiraProjects = await db.query.projects.findMany({
-      where: eq(projects.syncedByUserId, userId),
+      where: and(eq(projects.syncedByUserId, userId), eq(projects.provider, "jira")),
       columns: { id: true, asanaProjectId: true },
     });
-    const staleJiraProjectIds = staleJiraProjects
-      .filter((project) => project.asanaProjectId.startsWith("jira:"))
-      .map((project) => project.id);
+    const staleJiraProjectIds = staleJiraProjects.map((project) => project.id);
     if (staleJiraProjectIds.length > 0) {
       await db.update(tasks).set({ isActive: false }).where(inArray(tasks.projectId, staleJiraProjectIds));
       await db.update(projects).set({ isActive: false }).where(inArray(projects.id, staleJiraProjectIds));
@@ -630,6 +634,7 @@ export async function syncUserJiraData(userId: string, type: "initial" | "period
         .values({
           companyId: user.companyId,
           syncedByUserId: userId,
+          provider: "jira",
           asanaProjectId: externalProjectId,
           name: truncateName(jiraProject.name),
           isActive: true,
@@ -638,6 +643,7 @@ export async function syncUserJiraData(userId: string, type: "initial" | "period
         .onConflictDoUpdate({
           target: [projects.syncedByUserId, projects.asanaProjectId],
           set: {
+            provider: "jira",
             name: truncateName(jiraProject.name),
             isActive: true,
             lastSyncedAt: new Date(),
@@ -753,4 +759,216 @@ export async function syncUserJiraData(userId: string, type: "initial" | "period
       .where(eq(syncRuns.id, run[0].id));
     throw error;
   }
+}
+
+function isMondayUnauthorized(error: unknown) {
+  return error instanceof Error && error.message.includes("Monday API failed with 401");
+}
+
+type MondayBoardsResponse = {
+  boards: Array<{
+    id: string;
+    name: string;
+    state?: string;
+  }>;
+};
+
+type MondayItemsByBoardResponse = {
+  boards: Array<{
+    id: string;
+    items_page: {
+      items: Array<{
+        id: string;
+        name: string;
+      }>;
+    };
+  }>;
+};
+
+export async function syncUserMondayData(userId: string, type: "initial" | "periodic" | "manual" = "manual") {
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const connection = await db.query.mondayConnections.findFirst({
+    where: eq(mondayConnections.userId, userId),
+  });
+  if (!connection) {
+    throw new Error("Monday.com not connected for this user");
+  }
+  const mondayConnection = connection;
+
+  const runType = type === "initial" ? "monday_initial" : type === "periodic" ? "monday_periodic" : "monday_manual";
+  const run = await db
+    .insert(syncRuns)
+    .values({ companyId: user.companyId, userId, type: runType, status: "running" })
+    .returning();
+
+  try {
+    let accessToken = decrypt(mondayConnection.accessTokenEncrypted);
+    let refreshToken = mondayConnection.refreshTokenEncrypted ? decrypt(mondayConnection.refreshTokenEncrypted) : null;
+
+    async function refreshAccessToken() {
+      if (!refreshToken) {
+        throw new Error("Monday token expired and no refresh token is available. Reconnect Monday.");
+      }
+      const refreshed = await refreshMondayAccessToken(refreshToken);
+      accessToken = refreshed.access_token;
+      refreshToken = refreshed.refresh_token ?? refreshToken;
+      await db
+        .update(mondayConnections)
+        .set({
+          accessTokenEncrypted: encrypt(accessToken),
+          refreshTokenEncrypted: refreshToken ? encrypt(refreshToken) : null,
+          expiresAt: refreshed.expires_in ? new Date(Date.now() + refreshed.expires_in * 1000) : null,
+          scopes: refreshed.scope ?? mondayConnection.scopes,
+        })
+        .where(eq(mondayConnections.userId, userId));
+    }
+
+    async function mondayQuery<T>(query: string, variables: Record<string, unknown>) {
+      try {
+        return await mondayGraphqlRequest<T>(query, variables, accessToken);
+      } catch (error) {
+        if (!isMondayUnauthorized(error)) throw error;
+      }
+      await refreshAccessToken();
+      return mondayGraphqlRequest<T>(query, variables, accessToken);
+    }
+
+    await fetchMondayMe(accessToken);
+
+    const staleMondayProjects = await db.query.projects.findMany({
+      where: and(eq(projects.syncedByUserId, userId), eq(projects.provider, "monday")),
+      columns: { id: true },
+    });
+    const staleMondayProjectIds = staleMondayProjects.map((project) => project.id);
+    if (staleMondayProjectIds.length > 0) {
+      await db.update(tasks).set({ isActive: false }).where(inArray(tasks.projectId, staleMondayProjectIds));
+      await db.update(projects).set({ isActive: false }).where(inArray(projects.id, staleMondayProjectIds));
+    }
+
+    const boardsResult = await mondayQuery<MondayBoardsResponse>(
+      `
+        query MondayBoards {
+          boards(limit: 100) {
+            id
+            name
+            state
+          }
+        }
+      `,
+      {},
+    );
+
+    let projectsSynced = 0;
+    let tasksSynced = 0;
+    const subtasksSynced = 0;
+
+    for (const board of boardsResult.boards) {
+      if (board.state && board.state.toLowerCase() === "deleted") continue;
+
+      projectsSynced += 1;
+      const externalProjectId = `monday:${board.id}`;
+      const [upsertedProject] = await db
+        .insert(projects)
+        .values({
+          companyId: user.companyId,
+          syncedByUserId: userId,
+          provider: "monday",
+          asanaProjectId: externalProjectId,
+          name: truncateName(board.name),
+          isActive: true,
+          lastSyncedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: [projects.syncedByUserId, projects.asanaProjectId],
+          set: {
+            provider: "monday",
+            name: truncateName(board.name),
+            isActive: true,
+            lastSyncedAt: new Date(),
+          },
+        })
+        .returning();
+
+      const boardItems = await mondayQuery<MondayItemsByBoardResponse>(
+        `
+          query MondayBoardItems($boardIds: [ID!]) {
+            boards(ids: $boardIds) {
+              id
+              items_page(limit: 100) {
+                items {
+                  id
+                  name
+                }
+              }
+            }
+          }
+        `,
+        { boardIds: [board.id] },
+      );
+
+      const items = boardItems.boards[0]?.items_page.items ?? [];
+      for (const item of items) {
+        const externalTaskId = `monday:${item.id}`;
+        await db
+          .insert(tasks)
+          .values({
+            projectId: upsertedProject.id,
+            asanaTaskId: externalTaskId,
+            name: truncateName(item.name),
+            assignedUserId: userId,
+            parentTaskId: null,
+            isActive: true,
+            lastSyncedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: [tasks.projectId, tasks.asanaTaskId],
+            set: {
+              name: truncateName(item.name),
+              assignedUserId: userId,
+              parentTaskId: null,
+              isActive: true,
+              lastSyncedAt: new Date(),
+            },
+          });
+        tasksSynced += 1;
+      }
+    }
+
+    await db
+      .update(syncRuns)
+      .set({
+        status: "success",
+        endedAt: new Date(),
+        projectsSynced,
+        tasksSynced,
+        subtasksSynced,
+      })
+      .where(eq(syncRuns.id, run[0].id));
+
+    return { projectsSynced, tasksSynced, subtasksSynced };
+  } catch (error) {
+    await db
+      .update(syncRuns)
+      .set({
+        status: "failed",
+        endedAt: new Date(),
+        error: error instanceof Error ? error.message : "Unknown sync error",
+      })
+      .where(eq(syncRuns.id, run[0].id));
+    throw error;
+  }
+}
+
+export async function syncUserProviderData(
+  userId: string,
+  provider: "asana" | "jira" | "monday",
+  type: "initial" | "periodic" | "manual" = "manual",
+) {
+  if (provider === "asana") return syncUserAsanaData(userId, type);
+  if (provider === "jira") return syncUserJiraData(userId, type);
+  return syncUserMondayData(userId, type);
 }

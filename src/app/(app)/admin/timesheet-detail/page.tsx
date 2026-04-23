@@ -56,6 +56,7 @@ export default async function AdminTimesheetDetailPage({ searchParams }: { searc
     where: and(
       eq(projects.companyId, targetUser.companyId),
       eq(projects.syncedByUserId, targetUserId),
+      eq(projects.provider, targetUser.activeIntegrationProvider),
       entryProjectIds.length > 0
         ? or(eq(projects.isActive, true), inArray(projects.id, entryProjectIds))
         : eq(projects.isActive, true),

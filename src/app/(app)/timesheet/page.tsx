@@ -33,6 +33,7 @@ export default async function TimesheetPage({ searchParams }: { searchParams: Se
     where: and(
       eq(projects.companyId, user.companyId),
       eq(projects.syncedByUserId, user.id),
+      eq(projects.provider, user.activeIntegrationProvider),
       entryProjectIds.length > 0
         ? or(eq(projects.isActive, true), inArray(projects.id, entryProjectIds))
         : eq(projects.isActive, true),
