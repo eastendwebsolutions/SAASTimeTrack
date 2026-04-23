@@ -15,6 +15,26 @@ type AuditChangeInput = {
   metadataJson?: Record<string, unknown> | null;
 };
 
+function isMissingAuditTableError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { message?: unknown; cause?: unknown; code?: unknown };
+  const message = typeof candidate.message === "string" ? candidate.message : "";
+  const code = typeof candidate.code === "string" ? candidate.code : "";
+
+  if (code === "42P01" || message.includes('relation "audit_change_log" does not exist')) {
+    return true;
+  }
+
+  if (candidate.cause && typeof candidate.cause === "object") {
+    const cause = candidate.cause as { message?: unknown; code?: unknown };
+    const causeMessage = typeof cause.message === "string" ? cause.message : "";
+    const causeCode = typeof cause.code === "string" ? cause.code : "";
+    return causeCode === "42P01" || causeMessage.includes('relation "audit_change_log" does not exist');
+  }
+
+  return false;
+}
+
 export async function logAuditChanges(changes: AuditChangeInput[]) {
   const rows = changes
     .filter((change) => (change.beforeValue ?? null) !== (change.afterValue ?? null))
@@ -36,7 +56,7 @@ export async function logAuditChanges(changes: AuditChangeInput[]) {
     await db.insert(auditChangeLog).values(rows);
   } catch (error) {
     // Keep primary flows available in environments where audit table isn't migrated yet.
-    if (error instanceof Error && error.message.includes('relation "audit_change_log" does not exist')) {
+    if (isMissingAuditTableError(error)) {
       return;
     }
     throw error;
@@ -85,7 +105,7 @@ export async function listAuditChanges(args: {
       db.select({ value: count() }).from(auditChangeLog).where(whereClause),
     ]);
   } catch (error) {
-    if (!(error instanceof Error) || !error.message.includes('relation "audit_change_log" does not exist')) {
+    if (!isMissingAuditTableError(error)) {
       throw error;
     }
   }
