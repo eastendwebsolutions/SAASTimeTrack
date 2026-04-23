@@ -134,7 +134,7 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
             role: row.role,
             companyId: row.companyId,
             lastLoginAt: statusByClerkUserId.get(row.clerkUserId)?.lastLoginAt ?? null,
-            isActiveNow: statusByClerkUserId.get(row.clerkUserId)?.isActiveNow ?? false,
+            isActiveNow: row.id === user.id ? true : (statusByClerkUserId.get(row.clerkUserId)?.isActiveNow ?? false),
             isAccessRevoked: statusByClerkUserId.get(row.clerkUserId)?.isAccessRevoked ?? false,
           }))}
           companies={allCompanies.map((row) => ({
@@ -262,7 +262,7 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
               {companyUsers.map((companyUser) => {
                 const status = statusByClerkUserId.get(companyUser.clerkUserId);
                 const isRevoked = status?.isAccessRevoked ?? false;
-                const isActiveNow = status?.isActiveNow ?? false;
+                const isActiveNow = companyUser.id === user.id ? true : (status?.isActiveNow ?? false);
                 return (
                   <tr key={companyUser.id} className="border-t border-zinc-800">
                     <td className="px-4 py-3">{companyUser.email}</td>

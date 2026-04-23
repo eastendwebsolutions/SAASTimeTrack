@@ -3,14 +3,14 @@ import { getEnv } from "@/lib/env";
 type ClerkUserPayload = {
   id: string;
   banned?: boolean;
-  last_sign_in_at?: number | null;
-  last_active_at?: number | null;
+  last_sign_in_at?: number | string | null;
+  last_active_at?: number | string | null;
 };
 
 type ClerkSessionPayload = {
   id: string;
   status?: string | null;
-  last_active_at?: number | null;
+  last_active_at?: number | string | null;
 };
 
 export type ClerkAccessStatus = {
@@ -23,10 +23,12 @@ export type ClerkAccessStatus = {
 const ACTIVE_WINDOW_MS = 15 * 60 * 1000;
 const SESSION_ACTIVE_WINDOW_MS = 10 * 60 * 1000;
 
-function normalizeEpochMs(value: number | null | undefined) {
+function normalizeEpochMs(value: number | string | null | undefined) {
   if (!value) return null;
+  const numeric = typeof value === "string" ? Number(value) : value;
+  if (!Number.isFinite(numeric)) return null;
   // Clerk fields may arrive as epoch seconds or milliseconds depending on API shape/version.
-  return value < 1_000_000_000_000 ? value * 1000 : value;
+  return numeric < 1_000_000_000_000 ? numeric * 1000 : numeric;
 }
 
 async function clerkApi<T>(path: string, init: RequestInit = {}) {
