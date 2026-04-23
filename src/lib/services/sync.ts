@@ -2,6 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { asanaFetch, refreshAsanaAccessToken } from "@/lib/asana/client";
 import { db } from "@/lib/db";
 import { asanaConnections, companies, jiraConnections, mondayConnections, projects, syncRuns, tasks, users } from "@/lib/db/schema";
+import { isMissingIntegrationSchemaError } from "@/lib/integrations/schema-compat";
 import { jiraRequest, refreshJiraAccessToken } from "@/lib/jira/client";
 import { fetchMondayMe, mondayGraphqlRequest, refreshMondayAccessToken } from "@/lib/monday/client";
 import { decrypt, encrypt } from "@/lib/utils/crypto";
@@ -279,19 +280,30 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
         .where(eq(companies.id, user.companyId));
     }
 
+    let hasProjectsProviderColumn = true;
+
     // Drop stale cache from a previous Asana account / token (same SAASTimeTrack user).
     const staleProjectRows = await db
       .select({ id: projects.id })
       .from(projects)
-      .where(and(eq(projects.syncedByUserId, userId), eq(projects.provider, "asana")));
+      .where(and(eq(projects.syncedByUserId, userId), eq(projects.provider, "asana")))
+      .catch(async (error) => {
+        if (!isMissingIntegrationSchemaError(error)) throw error;
+        hasProjectsProviderColumn = false;
+        return db.select({ id: projects.id }).from(projects).where(eq(projects.syncedByUserId, userId));
+      });
     const staleProjectIds = staleProjectRows.map((row) => row.id);
     if (staleProjectIds.length > 0) {
       await db.update(tasks).set({ isActive: false }).where(inArray(tasks.projectId, staleProjectIds));
     }
-    await db
-      .update(projects)
-      .set({ isActive: false })
-      .where(and(eq(projects.syncedByUserId, userId), eq(projects.provider, "asana")));
+    if (hasProjectsProviderColumn) {
+      await db
+        .update(projects)
+        .set({ isActive: false })
+        .where(and(eq(projects.syncedByUserId, userId), eq(projects.provider, "asana")));
+    } else {
+      await db.update(projects).set({ isActive: false }).where(eq(projects.syncedByUserId, userId));
+    }
 
     for (const workspace of workspaces.data) {
       const workspaceProjects = await fetchWorkspaceProjectsPaginatedWithAuth(
@@ -368,22 +380,38 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
 
         const [upsertedProject] = await db
           .insert(projects)
-          .values({
-            companyId: user.companyId,
-            syncedByUserId: userId,
-            provider: "asana",
-            asanaProjectId: project.gid,
-            name: truncateName(project.name),
-            lastSyncedAt: new Date(),
-          })
+          .values(
+            hasProjectsProviderColumn
+              ? {
+                  companyId: user.companyId,
+                  syncedByUserId: userId,
+                  provider: "asana",
+                  asanaProjectId: project.gid,
+                  name: truncateName(project.name),
+                  lastSyncedAt: new Date(),
+                }
+              : {
+                  companyId: user.companyId,
+                  syncedByUserId: userId,
+                  asanaProjectId: project.gid,
+                  name: truncateName(project.name),
+                  lastSyncedAt: new Date(),
+                },
+          )
           .onConflictDoUpdate({
             target: [projects.syncedByUserId, projects.asanaProjectId],
-            set: {
-              provider: "asana",
-              name: truncateName(project.name),
-              lastSyncedAt: new Date(),
-              isActive: true,
-            },
+            set: hasProjectsProviderColumn
+              ? {
+                  provider: "asana",
+                  name: truncateName(project.name),
+                  lastSyncedAt: new Date(),
+                  isActive: true,
+                }
+              : {
+                  name: truncateName(project.name),
+                  lastSyncedAt: new Date(),
+                  isActive: true,
+                },
           })
           .returning();
 
