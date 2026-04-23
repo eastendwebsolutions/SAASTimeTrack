@@ -2,11 +2,11 @@ import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
 import { and, desc, eq } from "drizzle-orm";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
-import { canManagePokerPlanning, canReviewEntries } from "@/lib/auth/rbac";
+import { canReviewEntries } from "@/lib/auth/rbac";
 import { TimezoneSync } from "@/components/providers/timezone-sync";
 import { AsanaHeaderStatus } from "@/components/integrations/asana-header-status";
 import { db } from "@/lib/db";
-import { asanaConnections, jiraConnections, ppWorkspaceAdmins, syncRuns } from "@/lib/db/schema";
+import { asanaConnections, jiraConnections, syncRuns } from "@/lib/db/schema";
 import { getActiveProviderForUser } from "@/lib/integrations/provider";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -33,15 +33,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         orderBy: (table) => [desc(table.startedAt)],
       })
     : null;
-  const pokerWorkspaceAdminAssignment = user
-    ? await db.query.ppWorkspaceAdmins.findFirst({
-        where: and(eq(ppWorkspaceAdmins.companyId, user.companyId), eq(ppWorkspaceAdmins.userId, user.id)),
-      })
-    : null;
   const canSeeAdmin = Boolean(user && canReviewEntries(user.role));
-  const canSeePokerPlanning = Boolean(
-    user && canManagePokerPlanning(user.role, Boolean(pokerWorkspaceAdminAssignment)),
-  );
+  const canSeePokerPlanning = Boolean(user);
 
   const latestSyncedAt = latestSuccessfulRun?.endedAt;
   const latestSyncLabel = latestSyncedAt
