@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { IntegrationLabel } from "@/components/integrations/integration-label";
+import { cn } from "@/lib/utils/cn";
 
 const SYNC_REMINDER_INTERVAL_MS = 8 * 60 * 60 * 1000;
 
@@ -25,11 +26,11 @@ export function AsanaHeaderStatus({ provider, connected, lastSyncLabel, lastSync
   const { userId } = useAuth();
   const router = useRouter();
   const [isSyncing, setIsSyncing] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [syncFeedback, setSyncFeedback] = useState<{ text: string; variant: "success" | "error" } | null>(null);
   const [showReminder, setShowReminder] = useState(false);
 
   async function syncNow() {
-    setMessage(null);
+    setSyncFeedback(null);
     setIsSyncing(true);
     try {
       const response = await fetch(`/api/${provider}/sync/initial`, { method: "POST" });
@@ -50,13 +51,17 @@ export function AsanaHeaderStatus({ provider, connected, lastSyncLabel, lastSync
         details?: string;
       };
       if (!response.ok || !data.ok) {
-        setMessage(data.details || data.error || "Sync failed.");
+        setSyncFeedback({
+          text: data.details || data.error || "Sync failed.",
+          variant: "error",
+        });
         return;
       }
       if (provider === "asana" && (data.summary?.diagnostics || data.debugBuild)) {
-        setMessage(
-          `${data.debugBuild ? `Build: ${data.debugBuild}` : ""}${data.debugBuild && data.summary?.diagnostics ? " | " : ""}${data.summary?.diagnostics ? `Debug: assigned(workspace) ${data.summary.diagnostics.workspaceAssignedFetched}, candidates ${data.summary.diagnostics.assignedSubtasksCandidate}, resolved ${data.summary.diagnostics.assignedSubtasksResolvedToProject}` : ""}`,
-        );
+        setSyncFeedback({
+          text: `${data.debugBuild ? `Build: ${data.debugBuild}` : ""}${data.debugBuild && data.summary?.diagnostics ? " | " : ""}${data.summary?.diagnostics ? `Debug: assigned(workspace) ${data.summary.diagnostics.workspaceAssignedFetched}, candidates ${data.summary.diagnostics.assignedSubtasksCandidate}, resolved ${data.summary.diagnostics.assignedSubtasksResolvedToProject}` : ""}`,
+          variant: "success",
+        });
       }
       setShowReminder(false);
       router.refresh();
@@ -137,7 +142,17 @@ export function AsanaHeaderStatus({ provider, connected, lastSyncLabel, lastSync
             </Link>
           )}
         </div>
-        {message ? <p className="mt-1 text-[11px] text-rose-400">{message}</p> : null}
+        {syncFeedback ? (
+          <p
+            className={cn(
+              "mt-1 text-[11px]",
+              syncFeedback.variant === "success" && "text-emerald-400",
+              syncFeedback.variant === "error" && "text-rose-400",
+            )}
+          >
+            {syncFeedback.text}
+          </p>
+        ) : null}
       </div>
       {provider === "asana" && showReminder ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">

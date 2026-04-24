@@ -4,6 +4,9 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { IntegrationLabel } from "@/components/integrations/integration-label";
+import { cn } from "@/lib/utils/cn";
+
+type SyncFeedback = { text: string; variant: "success" | "error" | "neutral" };
 
 type SyncRun = {
   status: string;
@@ -37,7 +40,7 @@ export function AsanaSyncPanel({
   const postConnectStarted = useRef(false);
   const [run, setRun] = useState<SyncRun | null>(initialRun);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<SyncFeedback | null>(null);
 
   const refreshStatus = useCallback(async () => {
     const response = await fetch(statusPath, { cache: "no-store" });
@@ -48,7 +51,7 @@ export function AsanaSyncPanel({
 
   async function syncNow() {
     setIsSyncing(true);
-    setMessage("Sync in progress...");
+    setFeedback({ text: "Sync in progress...", variant: "neutral" });
     try {
       const response = await fetch(initialSyncPath, { method: "POST" });
       const data = (await response.json()) as {
@@ -68,15 +71,20 @@ export function AsanaSyncPanel({
         details?: string;
       };
       if (!response.ok || !data.ok) {
-        setMessage(data.details || data.error || "Sync failed.");
+        setFeedback({
+          text: data.details || data.error || "Sync failed.",
+          variant: "error",
+        });
       } else {
-        setMessage(
-          `Sync complete. Projects: ${data.summary?.projectsSynced ?? 0}, Tasks: ${data.summary?.tasksSynced ?? 0}, Subtasks: ${data.summary?.subtasksSynced ?? 0}` +
+        setFeedback({
+          text:
+            `Sync complete. Projects: ${data.summary?.projectsSynced ?? 0}, Tasks: ${data.summary?.tasksSynced ?? 0}, Subtasks: ${data.summary?.subtasksSynced ?? 0}` +
             (data.debugBuild ? ` | Build: ${data.debugBuild}` : "") +
             (data.summary?.diagnostics
               ? ` | Debug: assigned(workspace) ${data.summary.diagnostics.workspaceAssignedFetched}, candidates ${data.summary.diagnostics.assignedSubtasksCandidate}, resolved ${data.summary.diagnostics.assignedSubtasksResolvedToProject}`
               : ""),
-        );
+          variant: "success",
+        });
       }
       await refreshStatus();
     } finally {
@@ -89,7 +97,7 @@ export function AsanaSyncPanel({
     postConnectStarted.current = true;
     void (async () => {
       setIsSyncing(true);
-      setMessage(`Finishing ${providerLabel} setup (first sync)…`);
+      setFeedback({ text: `Finishing ${providerLabel} setup (first sync)…`, variant: "neutral" });
       try {
         const response = await fetch(initialSyncPath, { method: "POST" });
         const data = (await response.json()) as {
@@ -109,15 +117,20 @@ export function AsanaSyncPanel({
           details?: string;
         };
         if (!response.ok || !data.ok) {
-          setMessage(data.details || data.error || `First sync failed. Use “Sync ${providerLabel} Now” to retry.`);
+          setFeedback({
+            text: data.details || data.error || `First sync failed. Use “Sync ${providerLabel} Now” to retry.`,
+            variant: "error",
+          });
         } else {
-          setMessage(
-            `Sync complete. Projects: ${data.summary?.projectsSynced ?? 0}, Tasks: ${data.summary?.tasksSynced ?? 0}, Subtasks: ${data.summary?.subtasksSynced ?? 0}` +
+          setFeedback({
+            text:
+              `Sync complete. Projects: ${data.summary?.projectsSynced ?? 0}, Tasks: ${data.summary?.tasksSynced ?? 0}, Subtasks: ${data.summary?.subtasksSynced ?? 0}` +
               (data.debugBuild ? ` | Build: ${data.debugBuild}` : "") +
               (data.summary?.diagnostics
                 ? ` | Debug: assigned(workspace) ${data.summary.diagnostics.workspaceAssignedFetched}, candidates ${data.summary.diagnostics.assignedSubtasksCandidate}, resolved ${data.summary.diagnostics.assignedSubtasksResolvedToProject}`
                 : ""),
-          );
+            variant: "success",
+          });
         }
         await refreshStatus();
       } finally {
@@ -157,7 +170,18 @@ export function AsanaSyncPanel({
           />
         </Button>
       ) : null}
-      {message ? <p className="text-xs text-zinc-400">{message}</p> : null}
+      {feedback ? (
+        <p
+          className={cn(
+            "text-xs",
+            feedback.variant === "success" && "text-emerald-400",
+            feedback.variant === "error" && "text-rose-400",
+            feedback.variant === "neutral" && "text-zinc-400",
+          )}
+        >
+          {feedback.text}
+        </p>
+      ) : null}
     </div>
   );
 }

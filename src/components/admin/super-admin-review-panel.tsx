@@ -116,89 +116,102 @@ export function SuperAdminReviewPanel({ users, companies, workspaceAdmins, proje
       <div className="space-y-3">
         <h2 className="text-lg font-medium">All Users (All Companies)</h2>
         <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-zinc-900/80 text-left text-zinc-400">
-              <tr>
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">Role</th>
-                <th className="px-4 py-3">Company</th>
-                <th className="px-4 py-3">Last Login</th>
-                <th className="px-4 py-3">Active</th>
-                <th className="px-4 py-3">Access</th>
-                <th className="px-4 py-3">Workspace Admin</th>
-                <th className="px-4 py-3">Poker Planning Admin</th>
-                <th className="px-4 py-3">Access Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => (
-                <tr key={user.id} className="border-t border-zinc-800">
-                  <td className="px-4 py-3">{user.email}</td>
-                  <td className="px-4 py-3 capitalize">{user.role}</td>
-                  <td className="px-4 py-3">{companyMap.get(user.companyId) ?? user.companyId}</td>
-                  <td className="px-4 py-3">{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString("en-US") : "Never"}</td>
-                  <td className="px-4 py-3">
-                    <span className={user.isActiveNow ? "text-emerald-400" : "text-rose-400"}>
-                      {user.isActiveNow ? "Active" : "Offline"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={user.isAccessRevoked ? "text-rose-400" : "text-emerald-400"}>
-                      {user.isAccessRevoked ? "Revoked" : "Enabled"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {user.role === "super_admin" ? (
-                      <span className="text-xs text-zinc-500">Super Admin</span>
-                    ) : (
-                      <form action={`/api/admin/users/${user.id}/role`} method="post" className="flex items-center gap-2">
-                        <input type="hidden" name="role" value={user.role === "company_admin" ? "user" : "company_admin"} />
-                        <Button type="submit" variant={user.role === "company_admin" ? "secondary" : "primary"}>
-                          {user.role === "company_admin" ? "Revoke Company Admin" : "Make Company Admin"}
-                        </Button>
-                      </form>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {user.role === "super_admin" ? (
-                      <span className="text-xs text-zinc-500">Managed by Super Admin</span>
-                    ) : !user.isAccessRevoked && companyWorkspaceMap.get(user.companyId) ? (
-                      (() => {
-                        const workspaceId = companyWorkspaceMap.get(user.companyId)!;
-                        const enabled = workspaceAdminSet.has(`${user.id}:${workspaceId}`);
-                        return (
-                          <form action={`/api/admin/users/${user.id}/poker-planning-admin`} method="post" className="flex items-center gap-2">
-                            <input type="hidden" name="workspaceId" value={workspaceId} />
-                            <input type="hidden" name="enabled" value={enabled ? "0" : "1"} />
-                            <Button type="submit" variant={enabled ? "secondary" : "primary"}>
-                              {enabled ? "Revoke" : "Grant"}
-                            </Button>
-                            <span className="text-xs text-zinc-500">{enabled ? "Enabled" : "Disabled"}</span>
-                          </form>
-                        );
-                      })()
-                    ) : !user.isAccessRevoked ? (
-                      <span className="text-xs text-zinc-500">Workspace not synced yet</span>
-                    ) : (
-                      <span className="text-xs text-zinc-500">Access revoked</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {user.role === "super_admin" ? (
-                      <span className="text-xs text-zinc-500">Always enabled</span>
-                    ) : (
-                      <form action={`/api/admin/users/${user.id}/access`} method="post">
-                        <input type="hidden" name="enabled" value={user.isAccessRevoked ? "1" : "0"} />
-                        <Button type="submit" variant={user.isAccessRevoked ? "secondary" : "danger"}>
-                          {user.isAccessRevoked ? "Restore Access" : "Revoke Access"}
-                        </Button>
-                      </form>
-                    )}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[56rem] text-sm">
+              <thead className="bg-zinc-900/80 text-left text-zinc-400">
+                <tr>
+                  <th className="px-4 py-3">Email</th>
+                  <th className="px-4 py-3">Role</th>
+                  <th className="px-4 py-3">Company</th>
+                  <th className="px-4 py-3">Last Login</th>
+                  <th className="px-4 py-3">Active</th>
+                  <th className="px-4 py-3">Access</th>
+                  <th className="px-4 py-3">Workspace Admin</th>
+                  <th className="px-4 py-3">Poker Planning Admin</th>
+                  <th className="px-4 py-3">Access Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {users.map((user) => (
+                  <tr key={user.id} className="border-t border-zinc-800">
+                    <td className="px-4 py-3">{user.email}</td>
+                    <td className="px-4 py-3 capitalize">{user.role}</td>
+                    <td className="px-4 py-3">{companyMap.get(user.companyId) ?? user.companyId}</td>
+                    <td className="px-4 py-3">{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString("en-US") : "Never"}</td>
+                    <td className="px-4 py-3">
+                      <span className={user.isActiveNow ? "text-emerald-400" : "text-rose-400"}>
+                        {user.isActiveNow ? "Active" : "Offline"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={user.isAccessRevoked ? "text-rose-400" : "text-emerald-400"}>
+                        {user.isAccessRevoked ? "Revoked" : "Enabled"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {user.role === "super_admin" ? (
+                        <span className="text-xs text-zinc-500">Super Admin</span>
+                      ) : (
+                        <form action={`/api/admin/users/${user.id}/role`} method="post" className="flex items-center gap-2">
+                          <input type="hidden" name="role" value={user.role === "company_admin" ? "user" : "company_admin"} />
+                          <Button type="submit" variant={user.role === "company_admin" ? "secondary" : "primary"}>
+                            {user.role === "company_admin" ? "Revoke Company Admin" : "Make Company Admin"}
+                          </Button>
+                        </form>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {user.role === "super_admin" ? (
+                        <span className="text-xs text-zinc-500">Managed by Super Admin</span>
+                      ) : !user.isAccessRevoked && companyWorkspaceMap.get(user.companyId) ? (
+                        (() => {
+                          const workspaceId = companyWorkspaceMap.get(user.companyId)!;
+                          const enabled = workspaceAdminSet.has(`${user.id}:${workspaceId}`);
+                          return (
+                            <form
+                              action={`/api/admin/users/${user.id}/poker-planning-admin`}
+                              method="post"
+                              className="inline-flex items-center"
+                            >
+                              <input type="hidden" name="workspaceId" value={workspaceId} />
+                              <input type="hidden" name="enabled" value={enabled ? "0" : "1"} />
+                              <Button
+                                type="submit"
+                                variant={enabled ? "secondary" : "primary"}
+                                title={
+                                  enabled
+                                    ? "Remove poker planning admin for this user in this workspace"
+                                    : "Grant poker planning admin for this user in this workspace"
+                                }
+                              >
+                                {enabled ? "Revoke" : "Grant"}
+                              </Button>
+                            </form>
+                          );
+                        })()
+                      ) : !user.isAccessRevoked ? (
+                        <span className="text-xs text-zinc-500">Workspace not synced yet</span>
+                      ) : (
+                        <span className="text-xs text-zinc-500">Access revoked</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {user.role === "super_admin" ? (
+                        <span className="text-xs text-zinc-500">Always enabled</span>
+                      ) : (
+                        <form action={`/api/admin/users/${user.id}/access`} method="post">
+                          <input type="hidden" name="enabled" value={user.isAccessRevoked ? "1" : "0"} />
+                          <Button type="submit" variant={user.isAccessRevoked ? "secondary" : "danger"}>
+                            {user.isAccessRevoked ? "Restore Access" : "Revoke Access"}
+                          </Button>
+                        </form>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       </div>
 
