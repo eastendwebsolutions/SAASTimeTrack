@@ -23,6 +23,17 @@ export default async function TimePage({ searchParams }: { searchParams: SearchP
   const availableProjects = await withProjectsProviderColumnFallback(
     () =>
       db.query.projects.findMany({
+        columns: {
+          id: true,
+          companyId: true,
+          syncedByUserId: true,
+          asanaProjectId: true,
+          name: true,
+          isActive: true,
+          lastSyncedAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
         where: and(
           eq(projects.companyId, user.companyId),
           eq(projects.syncedByUserId, user.id),
@@ -33,6 +44,17 @@ export default async function TimePage({ searchParams }: { searchParams: SearchP
       }),
     () =>
       db.query.projects.findMany({
+        columns: {
+          id: true,
+          companyId: true,
+          syncedByUserId: true,
+          asanaProjectId: true,
+          name: true,
+          isActive: true,
+          lastSyncedAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
         where: and(
           eq(projects.companyId, user.companyId),
           eq(projects.syncedByUserId, user.id),
