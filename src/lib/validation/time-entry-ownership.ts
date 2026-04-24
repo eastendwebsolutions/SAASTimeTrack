@@ -17,6 +17,17 @@ export async function assertProjectTaskOwnedByUser(params: {
   const project = await withProjectsProviderColumnFallback(
     () =>
       db.query.projects.findFirst({
+        columns: {
+          id: true,
+          companyId: true,
+          syncedByUserId: true,
+          asanaProjectId: true,
+          name: true,
+          isActive: true,
+          lastSyncedAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
         where: and(
           eq(projects.id, projectId),
           eq(projects.syncedByUserId, ownerUserId),
@@ -26,6 +37,17 @@ export async function assertProjectTaskOwnedByUser(params: {
       }),
     () =>
       db.query.projects.findFirst({
+        columns: {
+          id: true,
+          companyId: true,
+          syncedByUserId: true,
+          asanaProjectId: true,
+          name: true,
+          isActive: true,
+          lastSyncedAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
         where: and(
           eq(projects.id, projectId),
           eq(projects.syncedByUserId, ownerUserId),
