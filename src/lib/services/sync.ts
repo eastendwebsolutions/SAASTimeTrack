@@ -1,3 +1,4 @@
+import { sql as vercelSql } from "@vercel/postgres";
 import { and, eq, inArray } from "drizzle-orm";
 import { asanaFetch, refreshAsanaAccessToken } from "@/lib/asana/client";
 import { db } from "@/lib/db";
@@ -378,42 +379,49 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
       for (const project of projectByGid.values()) {
         projectsSynced += 1;
 
-        const [upsertedProject] = await db
-          .insert(projects)
-          .values(
-            hasProjectsProviderColumn
-              ? {
-                  companyId: user.companyId,
-                  syncedByUserId: userId,
-                  provider: "asana",
-                  asanaProjectId: project.gid,
-                  name: truncateName(project.name),
-                  lastSyncedAt: new Date(),
-                }
-              : {
-                  companyId: user.companyId,
-                  syncedByUserId: userId,
-                  asanaProjectId: project.gid,
-                  name: truncateName(project.name),
-                  lastSyncedAt: new Date(),
-                },
-          )
-          .onConflictDoUpdate({
-            target: [projects.syncedByUserId, projects.asanaProjectId],
-            set: hasProjectsProviderColumn
-              ? {
-                  provider: "asana",
-                  name: truncateName(project.name),
-                  lastSyncedAt: new Date(),
-                  isActive: true,
-                }
-              : {
-                  name: truncateName(project.name),
-                  lastSyncedAt: new Date(),
-                  isActive: true,
-                },
-          })
-          .returning();
+        const projectName = truncateName(project.name);
+        const lastSyncedAt = new Date();
+        const lastSyncedAtIso = lastSyncedAt.toISOString();
+        let upsertedProject: { id: string };
+        if (hasProjectsProviderColumn) {
+          const [row] = await db
+            .insert(projects)
+            .values({
+              companyId: user.companyId,
+              syncedByUserId: userId,
+              provider: "asana",
+              asanaProjectId: project.gid,
+              name: projectName,
+              lastSyncedAt,
+            })
+            .onConflictDoUpdate({
+              target: [projects.syncedByUserId, projects.asanaProjectId],
+              set: {
+                provider: "asana",
+                name: projectName,
+                lastSyncedAt,
+                isActive: true,
+              },
+            })
+            .returning();
+          if (!row) throw new Error("Asana project upsert returned no row");
+          upsertedProject = row;
+        } else {
+          const inserted = await vercelSql<{ id: string }>`
+            insert into projects (company_id, synced_by_user_id, asana_project_id, name, last_synced_at, is_active)
+            values (${user.companyId}, ${userId}, ${project.gid}, ${projectName}, ${lastSyncedAtIso}, true)
+            on conflict (synced_by_user_id, asana_project_id)
+            do update set
+              name = excluded.name,
+              is_active = true,
+              last_synced_at = excluded.last_synced_at,
+              updated_at = now()
+            returning id
+          `;
+          const id = inserted.rows[0]?.id;
+          if (!id) throw new Error("Asana project upsert failed (legacy schema without provider column)");
+          upsertedProject = { id };
+        }
 
         const taskData = await fetchProjectTasksPaginatedWithAuth(project.gid, asanaFetchWithRefresh);
         const activeTasks = taskData.filter((task) => !task.completed);
