@@ -92,10 +92,12 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
     );
     const statusByClerkUserId = new Map(allUserStatuses.map((status) => [status.clerkUserId, status]));
     const allCompanies = await db.query.companies.findMany({
+      columns: { id: true, name: true, asanaWorkspaceId: true },
       orderBy: (table, { asc }) => [asc(table.name)],
     });
     const allWorkspaceAdmins = await db.query.ppWorkspaceAdmins.findMany();
     const allProjects = await db.query.projects.findMany({
+      columns: { id: true, name: true },
       orderBy: (table, { asc }) => [asc(table.name)],
     });
     const draftEntries = await db.query.timeEntries.findMany({
