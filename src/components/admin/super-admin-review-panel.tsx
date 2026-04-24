@@ -65,6 +65,10 @@ function formatHms(totalSeconds: number) {
   return `${hours}:${minutes}:${seconds}`;
 }
 
+function formatRole(role: string) {
+  return role.replaceAll("_", " ");
+}
+
 export function SuperAdminReviewPanel({ users, companies, workspaceAdmins, projects, entries, submittedSheets }: Props) {
   const [search, setSearch] = useState("");
   const [companyFilter, setCompanyFilter] = useState("all");
@@ -115,109 +119,127 @@ export function SuperAdminReviewPanel({ users, companies, workspaceAdmins, proje
     <div className="space-y-6">
       <div className="space-y-3">
         <h2 className="text-lg font-medium">All Users (All Companies)</h2>
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[56rem] text-sm">
-              <thead className="bg-zinc-900/80 text-left text-zinc-400">
-                <tr>
-                  <th className="px-4 py-3">Email</th>
-                  <th className="px-4 py-3">Role</th>
-                  <th className="px-4 py-3">Company</th>
-                  <th className="px-4 py-3">Last Login</th>
-                  <th className="px-4 py-3">Active</th>
-                  <th className="px-4 py-3">Access</th>
-                  <th className="px-4 py-3">Workspace Admin</th>
-                  <th className="px-4 py-3">Poker Planning Admin</th>
-                  <th className="px-4 py-3">Access Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((user) => (
-                  <tr key={user.id} className="border-t border-zinc-800">
-                    <td className="px-4 py-3">{user.email}</td>
-                    <td className="px-4 py-3 capitalize">{user.role}</td>
-                    <td className="px-4 py-3">{companyMap.get(user.companyId) ?? user.companyId}</td>
-                    <td className="px-4 py-3">{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString("en-US") : "Never"}</td>
-                    <td className="px-4 py-3">
-                      <span className={user.isActiveNow ? "text-emerald-400" : "text-rose-400"}>
-                        {user.isActiveNow ? "Active" : "Offline"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={user.isAccessRevoked ? "text-rose-400" : "text-emerald-400"}>
-                        {user.isAccessRevoked ? "Revoked" : "Enabled"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {user.role === "super_admin" ? (
-                        <span className="text-xs text-zinc-500">Super Admin</span>
-                      ) : (
-                        <form action={`/api/admin/users/${user.id}/role`} method="post" className="flex items-center gap-2">
-                          <input type="hidden" name="role" value={user.role === "company_admin" ? "user" : "company_admin"} />
-                          <Button type="submit" variant={user.role === "company_admin" ? "secondary" : "primary"}>
+        <Card className="divide-y divide-zinc-800">
+          {users.map((user) => {
+            const companyName = companyMap.get(user.companyId) ?? user.companyId;
+            const workspaceId = companyWorkspaceMap.get(user.companyId);
+            const pokerEnabled =
+              workspaceId != null ? workspaceAdminSet.has(`${user.id}:${workspaceId}`) : false;
+
+            return (
+              <article key={user.id} className="p-4 sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="truncate text-sm font-medium text-zinc-100" title={user.email}>
+                      {user.email}
+                    </p>
+                    <p className="text-xs text-zinc-400">
+                      <span className="capitalize">{formatRole(user.role)}</span>
+                      <span className="text-zinc-600"> · </span>
+                      <span className="break-words text-zinc-300">{companyName}</span>
+                    </p>
+                  </div>
+                  <dl className="grid shrink-0 grid-cols-2 gap-x-4 gap-y-1 text-xs sm:text-sm">
+                    <div>
+                      <dt className="text-zinc-500">Active</dt>
+                      <dd className={user.isActiveNow ? "text-emerald-400" : "text-rose-400"}>
+                        {user.isActiveNow ? "Yes" : "No"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-zinc-500">Access</dt>
+                      <dd className={user.isAccessRevoked ? "text-rose-400" : "text-emerald-400"}>
+                        {user.isAccessRevoked ? "Revoked" : "OK"}
+                      </dd>
+                    </div>
+                    <div className="col-span-2 sm:col-span-2">
+                      <dt className="text-zinc-500">Last login</dt>
+                      <dd className="break-words text-zinc-200">
+                        {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString("en-US") : "Never"}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+
+                <div className="mt-4 grid gap-4 border-t border-zinc-800/80 pt-4 sm:grid-cols-2 xl:grid-cols-3">
+                  <section className="min-w-0 space-y-2">
+                    <h3 className="text-xs font-medium uppercase tracking-wide text-zinc-500">Workspace admin</h3>
+                    {user.role === "super_admin" ? (
+                      <p className="text-xs text-zinc-500">Super Admin account</p>
+                    ) : (
+                      <form action={`/api/admin/users/${user.id}/role`} method="post" className="max-w-full">
+                        <input type="hidden" name="role" value={user.role === "company_admin" ? "user" : "company_admin"} />
+                        <Button
+                          type="submit"
+                          variant={user.role === "company_admin" ? "secondary" : "primary"}
+                          className="h-auto w-full max-w-full whitespace-normal py-2 sm:w-auto"
+                        >
+                          <span className="hidden sm:inline">
                             {user.role === "company_admin" ? "Revoke Company Admin" : "Make Company Admin"}
-                          </Button>
-                        </form>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {user.role === "super_admin" ? (
-                        <span className="text-xs text-zinc-500">Managed by Super Admin</span>
-                      ) : !user.isAccessRevoked && companyWorkspaceMap.get(user.companyId) ? (
-                        (() => {
-                          const workspaceId = companyWorkspaceMap.get(user.companyId)!;
-                          const enabled = workspaceAdminSet.has(`${user.id}:${workspaceId}`);
-                          return (
-                            <form
-                              action={`/api/admin/users/${user.id}/poker-planning-admin`}
-                              method="post"
-                              className="inline-flex items-center"
-                            >
-                              <input type="hidden" name="workspaceId" value={workspaceId} />
-                              <input type="hidden" name="enabled" value={enabled ? "0" : "1"} />
-                              <Button
-                                type="submit"
-                                variant={enabled ? "secondary" : "primary"}
-                                title={
-                                  enabled
-                                    ? "Remove poker planning admin for this user in this workspace"
-                                    : "Grant poker planning admin for this user in this workspace"
-                                }
-                              >
-                                {enabled ? "Revoke" : "Grant"}
-                              </Button>
-                            </form>
-                          );
-                        })()
-                      ) : !user.isAccessRevoked ? (
-                        <span className="text-xs text-zinc-500">Workspace not synced yet</span>
-                      ) : (
-                        <span className="text-xs text-zinc-500">Access revoked</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {user.role === "super_admin" ? (
-                        <span className="text-xs text-zinc-500">Always enabled</span>
-                      ) : (
-                        <form action={`/api/admin/users/${user.id}/access`} method="post">
-                          <input type="hidden" name="enabled" value={user.isAccessRevoked ? "1" : "0"} />
-                          <Button type="submit" variant={user.isAccessRevoked ? "secondary" : "danger"}>
-                            {user.isAccessRevoked ? "Restore Access" : "Revoke Access"}
-                          </Button>
-                        </form>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                          </span>
+                          <span className="sm:hidden">
+                            {user.role === "company_admin" ? "Revoke admin role" : "Grant company admin"}
+                          </span>
+                        </Button>
+                      </form>
+                    )}
+                  </section>
+
+                  <section className="min-w-0 space-y-2">
+                    <h3 className="text-xs font-medium uppercase tracking-wide text-zinc-500">Poker planning</h3>
+                    {user.role === "super_admin" ? (
+                      <p className="text-xs text-zinc-500">Managed with Super Admin</p>
+                    ) : !user.isAccessRevoked && workspaceId ? (
+                      <form action={`/api/admin/users/${user.id}/poker-planning-admin`} method="post" className="max-w-full">
+                        <input type="hidden" name="workspaceId" value={workspaceId} />
+                        <input type="hidden" name="enabled" value={pokerEnabled ? "0" : "1"} />
+                        <Button
+                          type="submit"
+                          variant={pokerEnabled ? "secondary" : "primary"}
+                          className="w-full max-w-full sm:w-auto"
+                          title={
+                            pokerEnabled
+                              ? "Remove poker planning admin for this user in this workspace"
+                              : "Grant poker planning admin for this user in this workspace"
+                          }
+                        >
+                          {pokerEnabled ? "Revoke" : "Grant"}
+                        </Button>
+                      </form>
+                    ) : !user.isAccessRevoked ? (
+                      <p className="text-xs text-zinc-500">Workspace not synced yet</p>
+                    ) : (
+                      <p className="text-xs text-zinc-500">Access revoked</p>
+                    )}
+                  </section>
+
+                  <section className="min-w-0 space-y-2 sm:col-span-2 xl:col-span-1">
+                    <h3 className="text-xs font-medium uppercase tracking-wide text-zinc-500">Account access</h3>
+                    {user.role === "super_admin" ? (
+                      <p className="text-xs text-zinc-500">Always enabled</p>
+                    ) : (
+                      <form action={`/api/admin/users/${user.id}/access`} method="post" className="max-w-full">
+                        <input type="hidden" name="enabled" value={user.isAccessRevoked ? "1" : "0"} />
+                        <Button
+                          type="submit"
+                          variant={user.isAccessRevoked ? "secondary" : "danger"}
+                          className="h-auto w-full max-w-full whitespace-normal py-2 sm:w-auto"
+                        >
+                          {user.isAccessRevoked ? "Restore access" : "Revoke access"}
+                        </Button>
+                      </form>
+                    )}
+                  </section>
+                </div>
+              </article>
+            );
+          })}
         </Card>
       </div>
 
       <div className="space-y-3">
         <h2 className="text-lg font-medium">Timesheets (Submitted + Unsubmitted)</h2>
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <input
             className="rounded-md border border-zinc-700 bg-zinc-950 p-2 text-sm"
             placeholder="Search user/company/summary"
@@ -269,54 +291,67 @@ export function SuperAdminReviewPanel({ users, companies, workspaceAdmins, proje
           const totalSeconds = sheetEntries.reduce((sum, entry) => sum + entry.durationMinutes * 60, 0);
 
           return (
-            <Card key={sheet.id} className="p-4">
-              <p className="text-sm text-zinc-200">
+            <Card key={sheet.id} className="min-w-0 p-4">
+              <p className="break-words text-sm text-zinc-200">
                 {userMap.get(sheet.userId)?.email ?? sheet.userId} | {companyMap.get(sheet.companyId) ?? sheet.companyId}
               </p>
-              <p className="text-xs text-zinc-500">
+              <p className="break-words text-xs text-zinc-500">
                 Week of {new Date(sheet.weekStart).toLocaleDateString("en-US")} | Status:{" "}
                 <span className="capitalize">{sheet.status === "submitted" ? "Submitted" : "Unsubmitted"}</span>
                 {sheet.submittedAt
                   ? ` | Submitted: ${new Date(sheet.submittedAt).toLocaleString("en-US")} from ${sheet.submittedFromIp ?? "unknown"}`
                   : ""}
               </p>
-              <table className="mt-3 w-full text-sm">
-                <thead className="text-left text-zinc-500">
-                  <tr>
-                    <th className="py-2">Project</th>
-                    <th className="py-2">Time In</th>
-                    <th className="py-2">Time Out</th>
-                    <th className="py-2">Summary</th>
-                    <th className="py-2">Hours</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sheetEntries.map((entry) => (
-                    <tr key={entry.id} className="border-t border-zinc-800">
-                      <td className="py-2">{projectMap.get(entry.projectId) ?? entry.projectId}</td>
-                      <td className="py-2">{new Date(entry.timeIn).toLocaleTimeString("en-US")}</td>
-                      <td className="py-2">{new Date(entry.timeOut).toLocaleTimeString("en-US")}</td>
-                      <td className="py-2">{entry.summary}</td>
-                      <td className="py-2 font-mono">{formatHms(entry.durationMinutes * 60)}</td>
-                    </tr>
-                  ))}
-                  <tr className="border-t border-zinc-700">
-                    <td className="py-2 font-medium text-zinc-100" colSpan={4}>
-                      Total
-                    </td>
-                    <td className="py-2 font-mono font-semibold text-zinc-100">{formatHms(totalSeconds)}</td>
-                  </tr>
-                </tbody>
-              </table>
-              <div className="mt-3 flex gap-2">
-                <Link href={`/admin/timesheet-detail?userId=${sheet.userId}&weekStart=${new Date(sheet.weekStart).toISOString()}`}>
-                  <Button type="button" variant="secondary">
+              <div className="mt-3 space-y-2">
+                <div className="hidden text-xs font-medium uppercase tracking-wide text-zinc-500 md:grid md:grid-cols-[minmax(0,1.1fr)_auto_auto_minmax(0,1fr)_auto] md:gap-3 md:px-1">
+                  <span>Project</span>
+                  <span>In</span>
+                  <span>Out</span>
+                  <span>Summary</span>
+                  <span className="text-right">Hours</span>
+                </div>
+                {sheetEntries.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="grid grid-cols-1 gap-2 rounded-md border border-zinc-800 bg-zinc-950/50 p-3 text-sm md:grid-cols-[minmax(0,1.1fr)_auto_auto_minmax(0,1fr)_auto] md:items-center md:gap-3"
+                  >
+                    <div className="min-w-0">
+                      <span className="text-zinc-500 md:hidden">Project · </span>
+                      <span className="break-words text-zinc-200">
+                        {projectMap.get(entry.projectId) ?? entry.projectId}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-zinc-500 md:hidden">In · </span>
+                      <span className="font-mono text-zinc-200">{new Date(entry.timeIn).toLocaleTimeString("en-US")}</span>
+                    </div>
+                    <div>
+                      <span className="text-zinc-500 md:hidden">Out · </span>
+                      <span className="font-mono text-zinc-200">{new Date(entry.timeOut).toLocaleTimeString("en-US")}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-zinc-500 md:hidden">Summary · </span>
+                      <span className="break-words text-zinc-300">{entry.summary}</span>
+                    </div>
+                    <div className="font-mono text-zinc-100 md:text-right">{formatHms(entry.durationMinutes * 60)}</div>
+                  </div>
+                ))}
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-700 pt-3 text-sm">
+                  <span className="font-medium text-zinc-100">Total</span>
+                  <span className="font-mono font-semibold text-zinc-100">{formatHms(totalSeconds)}</span>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <Link href={`/admin/timesheet-detail?userId=${sheet.userId}&weekStart=${new Date(sheet.weekStart).toISOString()}`} className="sm:inline-block">
+                  <Button type="button" variant="secondary" className="w-full sm:w-auto">
                     Open Full Timesheet
                   </Button>
                 </Link>
                 {sheet.status === "submitted" ? (
-                  <form action={`/api/timesheets/by-id/${sheet.id}/approve`} method="post">
-                    <Button type="submit">Approve Timesheet</Button>
+                  <form action={`/api/timesheets/by-id/${sheet.id}/approve`} method="post" className="sm:inline-block">
+                    <Button type="submit" className="w-full sm:w-auto">
+                      Approve Timesheet
+                    </Button>
                   </form>
                 ) : null}
               </div>

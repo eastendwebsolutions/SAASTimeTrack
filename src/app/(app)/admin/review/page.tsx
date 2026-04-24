@@ -263,76 +263,80 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
       <h1 className="text-2xl font-semibold">Admin Review</h1>
       <div className="space-y-3">
         <h2 className="text-lg font-medium">Workspace Users</h2>
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-zinc-900/80 text-left text-zinc-400">
-              <tr>
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">Role</th>
-                <th className="px-4 py-3">Last Login</th>
-                <th className="px-4 py-3">Active</th>
-                <th className="px-4 py-3">Access</th>
-                <th className="px-4 py-3">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {companyUsers.map((companyUser) => {
-                const status = statusByClerkUserId.get(companyUser.clerkUserId);
-                const isRevoked = status?.isAccessRevoked ?? false;
-                const isActiveNow = companyUser.id === user.id ? true : (status?.isActiveNow ?? false);
-                return (
-                  <tr key={companyUser.id} className="border-t border-zinc-800">
-                    <td className="px-4 py-3">{companyUser.email}</td>
-                    <td className="px-4 py-3 capitalize">{companyUser.role}</td>
-                    <td className="px-4 py-3">
-                      {status?.lastLoginAt ? new Date(status.lastLoginAt).toLocaleString("en-US") : "Never"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={isActiveNow ? "text-emerald-400" : "text-rose-400"}>
-                        {isActiveNow ? "Active" : "Offline"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={isRevoked ? "text-rose-400" : "text-emerald-400"}>
-                        {isRevoked ? "Revoked" : "Enabled"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {companyUser.role === "super_admin" ? (
-                        <span className="text-xs text-zinc-500">Managed by Super Admin</span>
-                      ) : !isRevoked ? (
-                        <div className="flex items-center gap-2">
-                          <form action={`/api/admin/users/${companyUser.id}/role`} method="post">
-                            <input
-                              type="hidden"
-                              name="role"
-                              value={companyUser.role === "company_admin" ? "user" : "company_admin"}
-                            />
-                            <Button type="submit" variant={companyUser.role === "company_admin" ? "secondary" : "primary"}>
-                              {companyUser.role === "company_admin" ? "Revoke Company Admin" : "Make Company Admin"}
-                            </Button>
-                          </form>
-                          <form action={`/api/admin/users/${companyUser.id}/access`} method="post">
-                            <input type="hidden" name="enabled" value="0" />
-                            <Button type="submit" variant="danger">
-                              Revoke Access
-                            </Button>
-                          </form>
-                        </div>
-                      ) : (
-                        <form action={`/api/admin/users/${companyUser.id}/access`} method="post">
-                          <input type="hidden" name="enabled" value="1" />
-                          <Button type="submit" variant="secondary">
-                            Restore Access
-                          </Button>
-                        </form>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <Card className="divide-y divide-zinc-800">
+          {companyUsers.map((companyUser) => {
+            const status = statusByClerkUserId.get(companyUser.clerkUserId);
+            const isRevoked = status?.isAccessRevoked ?? false;
+            const isActiveNow = companyUser.id === user.id ? true : (status?.isActiveNow ?? false);
+            return (
+              <article key={companyUser.id} className="p-4 sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="truncate text-sm font-medium text-zinc-100" title={companyUser.email}>
+                      {companyUser.email}
+                    </p>
+                    <p className="text-xs capitalize text-zinc-400">{companyUser.role.replaceAll("_", " ")}</p>
+                  </div>
+                  <dl className="grid shrink-0 grid-cols-2 gap-x-4 gap-y-1 text-xs sm:text-sm">
+                    <div>
+                      <dt className="text-zinc-500">Active</dt>
+                      <dd className={isActiveNow ? "text-emerald-400" : "text-rose-400"}>{isActiveNow ? "Yes" : "No"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-zinc-500">Access</dt>
+                      <dd className={isRevoked ? "text-rose-400" : "text-emerald-400"}>{isRevoked ? "Revoked" : "OK"}</dd>
+                    </div>
+                    <div className="col-span-2">
+                      <dt className="text-zinc-500">Last login</dt>
+                      <dd className="break-words text-zinc-200">
+                        {status?.lastLoginAt ? new Date(status.lastLoginAt).toLocaleString("en-US") : "Never"}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+                <div className="mt-4 border-t border-zinc-800/80 pt-4">
+                  {companyUser.role === "super_admin" ? (
+                    <p className="text-xs text-zinc-500">Managed by Super Admin</p>
+                  ) : !isRevoked ? (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                      <form action={`/api/admin/users/${companyUser.id}/role`} method="post" className="max-w-full sm:inline-block">
+                        <input
+                          type="hidden"
+                          name="role"
+                          value={companyUser.role === "company_admin" ? "user" : "company_admin"}
+                        />
+                        <Button
+                          type="submit"
+                          variant={companyUser.role === "company_admin" ? "secondary" : "primary"}
+                          className="h-auto w-full max-w-full whitespace-normal py-2 sm:w-auto"
+                        >
+                          <span className="hidden sm:inline">
+                            {companyUser.role === "company_admin" ? "Revoke Company Admin" : "Make Company Admin"}
+                          </span>
+                          <span className="sm:hidden">
+                            {companyUser.role === "company_admin" ? "Revoke admin role" : "Grant company admin"}
+                          </span>
+                        </Button>
+                      </form>
+                      <form action={`/api/admin/users/${companyUser.id}/access`} method="post" className="max-w-full sm:inline-block">
+                        <input type="hidden" name="enabled" value="0" />
+                        <Button type="submit" variant="danger" className="w-full sm:w-auto">
+                          Revoke access
+                        </Button>
+                      </form>
+                    </div>
+                  ) : (
+                    <form action={`/api/admin/users/${companyUser.id}/access`} method="post" className="max-w-full">
+                      <input type="hidden" name="enabled" value="1" />
+                      <Button type="submit" variant="secondary" className="w-full sm:w-auto">
+                        Restore access
+                      </Button>
+                    </form>
+                  )}
+                </div>
+              </article>
+            );
+          })}
         </Card>
       </div>
       <div className="space-y-3">
@@ -358,15 +362,20 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
                 ? ` | Submitted on ${sheet.submittedAt.toLocaleString("en-US")} from ${sheet.submittedFromIp ?? "unknown"}`
                 : ""}
             </p>
-            <div className="mt-3 flex gap-2">
-              <a href={`/admin/timesheet-detail?userId=${sheet.userId}&weekStart=${new Date(sheet.weekStart).toISOString()}`}>
-                <Button type="button" variant="secondary">
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <a
+                href={`/admin/timesheet-detail?userId=${sheet.userId}&weekStart=${new Date(sheet.weekStart).toISOString()}`}
+                className="sm:inline-block"
+              >
+                <Button type="button" variant="secondary" className="w-full sm:w-auto">
                   Open Full Timesheet
                 </Button>
               </a>
               {sheet.status === "submitted" ? (
-                <form action={`/api/timesheets/by-id/${sheet.id}/approve`} method="post">
-                  <Button type="submit">Approve Timesheet</Button>
+                <form action={`/api/timesheets/by-id/${sheet.id}/approve`} method="post" className="sm:inline-block">
+                  <Button type="submit" className="w-full sm:w-auto">
+                    Approve Timesheet
+                  </Button>
                 </form>
               ) : null}
             </div>
