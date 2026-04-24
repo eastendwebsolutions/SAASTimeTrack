@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { projects, tasks } from "@/lib/db/schema";
 import { getActiveProviderForUser } from "@/lib/integrations/provider";
+import { withProjectsProviderColumnFallback } from "@/lib/integrations/projects-provider-fallback";
 
 /** Ensures project/task/subtask rows belong to the time entry owner (per-user Asana cache). */
 export async function assertProjectTaskOwnedByUser(params: {
@@ -13,14 +14,25 @@ export async function assertProjectTaskOwnedByUser(params: {
   const { ownerUserId, projectId, taskId, subtaskId } = params;
   const ownerProvider = await getActiveProviderForUser(ownerUserId);
 
-  const project = await db.query.projects.findFirst({
-    where: and(
-      eq(projects.id, projectId),
-      eq(projects.syncedByUserId, ownerUserId),
-      eq(projects.provider, ownerProvider),
-      eq(projects.isActive, true),
-    ),
-  });
+  const project = await withProjectsProviderColumnFallback(
+    () =>
+      db.query.projects.findFirst({
+        where: and(
+          eq(projects.id, projectId),
+          eq(projects.syncedByUserId, ownerUserId),
+          eq(projects.provider, ownerProvider),
+          eq(projects.isActive, true),
+        ),
+      }),
+    () =>
+      db.query.projects.findFirst({
+        where: and(
+          eq(projects.id, projectId),
+          eq(projects.syncedByUserId, ownerUserId),
+          eq(projects.isActive, true),
+        ),
+      }),
+  );
   if (!project) {
     throw new Error("Invalid project for this user");
   }

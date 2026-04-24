@@ -9,6 +9,7 @@ import { listAuditChanges } from "@/lib/services/audit-log";
 import { getWeekBounds } from "@/lib/services/week";
 import { TimesheetDetailEditor } from "@/components/admin/timesheet-detail-editor";
 import { getActiveProviderForUser } from "@/lib/integrations/provider";
+import { withProjectsProviderColumnFallback } from "@/lib/integrations/projects-provider-fallback";
 
 type SearchParams = Promise<{ userId?: string; weekStart?: string; auditPage?: string }>;
 
@@ -63,17 +64,31 @@ export default async function AdminTimesheetDetailPage({ searchParams }: { searc
 
   const targetProvider = await getActiveProviderForUser(targetUserId);
 
-  const companyProjects = await db.query.projects.findMany({
-    where: and(
-      eq(projects.companyId, targetUser.companyId),
-      eq(projects.syncedByUserId, targetUserId),
-      eq(projects.provider, targetProvider),
-      entryProjectIds.length > 0
-        ? or(eq(projects.isActive, true), inArray(projects.id, entryProjectIds))
-        : eq(projects.isActive, true),
-    ),
-    orderBy: (table, { asc }) => [asc(table.name)],
-  });
+  const companyProjects = await withProjectsProviderColumnFallback(
+    () =>
+      db.query.projects.findMany({
+        where: and(
+          eq(projects.companyId, targetUser.companyId),
+          eq(projects.syncedByUserId, targetUserId),
+          eq(projects.provider, targetProvider),
+          entryProjectIds.length > 0
+            ? or(eq(projects.isActive, true), inArray(projects.id, entryProjectIds))
+            : eq(projects.isActive, true),
+        ),
+        orderBy: (table, { asc }) => [asc(table.name)],
+      }),
+    () =>
+      db.query.projects.findMany({
+        where: and(
+          eq(projects.companyId, targetUser.companyId),
+          eq(projects.syncedByUserId, targetUserId),
+          entryProjectIds.length > 0
+            ? or(eq(projects.isActive, true), inArray(projects.id, entryProjectIds))
+            : eq(projects.isActive, true),
+        ),
+        orderBy: (table, { asc }) => [asc(table.name)],
+      }),
+  );
   const projectIds = companyProjects.map((project) => project.id);
   const companyTasks =
     projectIds.length > 0

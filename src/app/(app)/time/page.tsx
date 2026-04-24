@@ -6,6 +6,8 @@ import { projects, tasks } from "@/lib/db/schema";
 import { Card } from "@/components/ui/card";
 import { QuickEntryForm } from "@/components/time/quick-entry-form";
 import { listAuditChanges } from "@/lib/services/audit-log";
+import { getActiveProviderForUser } from "@/lib/integrations/provider";
+import { withProjectsProviderColumnFallback } from "@/lib/integrations/projects-provider-fallback";
 
 type SearchParams = Promise<{ auditPage?: string }>;
 
@@ -17,15 +19,28 @@ export default async function TimePage({ searchParams }: { searchParams: SearchP
   const params = await searchParams;
   const auditPage = Math.max(1, Number(params.auditPage ?? "1") || 1);
 
-  const availableProjects = await db.query.projects.findMany({
-    where: and(
-      eq(projects.companyId, user.companyId),
-      eq(projects.syncedByUserId, user.id),
-      eq(projects.provider, user.activeIntegrationProvider),
-      eq(projects.isActive, true),
-    ),
-    orderBy: (table, { asc }) => [asc(table.name)],
-  });
+  const activeProvider = await getActiveProviderForUser(user.id);
+  const availableProjects = await withProjectsProviderColumnFallback(
+    () =>
+      db.query.projects.findMany({
+        where: and(
+          eq(projects.companyId, user.companyId),
+          eq(projects.syncedByUserId, user.id),
+          eq(projects.provider, activeProvider),
+          eq(projects.isActive, true),
+        ),
+        orderBy: (table, { asc }) => [asc(table.name)],
+      }),
+    () =>
+      db.query.projects.findMany({
+        where: and(
+          eq(projects.companyId, user.companyId),
+          eq(projects.syncedByUserId, user.id),
+          eq(projects.isActive, true),
+        ),
+        orderBy: (table, { asc }) => [asc(table.name)],
+      }),
+  );
   const projectIds = availableProjects.map((project) => project.id);
 
   const availableTasks = projectIds.length

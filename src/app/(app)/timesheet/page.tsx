@@ -10,6 +10,8 @@ import { projects, timeEntries, timesheets } from "@/lib/db/schema";
 import { listAuditChanges } from "@/lib/services/audit-log";
 import { getWeekBounds } from "@/lib/services/week";
 import { TimesheetClient } from "@/components/timesheet/timesheet-client";
+import { getActiveProviderForUser } from "@/lib/integrations/provider";
+import { withProjectsProviderColumnFallback } from "@/lib/integrations/projects-provider-fallback";
 
 type SearchParams = Promise<{ auditPage?: string }>;
 
@@ -29,18 +31,34 @@ export default async function TimesheetPage({ searchParams }: { searchParams: Se
     orderBy: (table, { desc }) => [desc(table.entryDate)],
   });
   const entryProjectIds = [...new Set(entries.map((e) => e.projectId))];
-  const projectOptions = await db.query.projects.findMany({
-    where: and(
-      eq(projects.companyId, user.companyId),
-      eq(projects.syncedByUserId, user.id),
-      eq(projects.provider, user.activeIntegrationProvider),
-      entryProjectIds.length > 0
-        ? or(eq(projects.isActive, true), inArray(projects.id, entryProjectIds))
-        : eq(projects.isActive, true),
-    ),
-    columns: { id: true, name: true },
-    orderBy: (table, { asc }) => [asc(table.name)],
-  });
+  const activeProvider = await getActiveProviderForUser(user.id);
+  const projectOptions = await withProjectsProviderColumnFallback(
+    () =>
+      db.query.projects.findMany({
+        where: and(
+          eq(projects.companyId, user.companyId),
+          eq(projects.syncedByUserId, user.id),
+          eq(projects.provider, activeProvider),
+          entryProjectIds.length > 0
+            ? or(eq(projects.isActive, true), inArray(projects.id, entryProjectIds))
+            : eq(projects.isActive, true),
+        ),
+        columns: { id: true, name: true },
+        orderBy: (table, { asc }) => [asc(table.name)],
+      }),
+    () =>
+      db.query.projects.findMany({
+        where: and(
+          eq(projects.companyId, user.companyId),
+          eq(projects.syncedByUserId, user.id),
+          entryProjectIds.length > 0
+            ? or(eq(projects.isActive, true), inArray(projects.id, entryProjectIds))
+            : eq(projects.isActive, true),
+        ),
+        columns: { id: true, name: true },
+        orderBy: (table, { asc }) => [asc(table.name)],
+      }),
+  );
   const currentSheet = await db.query.timesheets.findFirst({
     where: and(eq(timesheets.userId, user.id), eq(timesheets.weekStart, start)),
   });
