@@ -74,6 +74,9 @@ export function SuperAdminReviewPanel({ users, companies, workspaceAdmins, proje
   const [companyFilter, setCompanyFilter] = useState("all");
   const [userFilter, setUserFilter] = useState("all");
   const [projectFilter, setProjectFilter] = useState("all");
+  const [allUsersSearch, setAllUsersSearch] = useState("");
+  const [allUsersWorkspace, setAllUsersWorkspace] = useState("all");
+  const [allUsersRole, setAllUsersRole] = useState("all");
 
   const companyMap = useMemo(() => new Map(companies.map((company) => [company.id, company.name])), [companies]);
   const companyWorkspaceMap = useMemo(
@@ -98,6 +101,65 @@ export function SuperAdminReviewPanel({ users, companies, workspaceAdmins, proje
     return map;
   }, [entries]);
 
+  const distinctRoles = useMemo(() => {
+    const set = new Set(users.map((u) => u.role));
+    return [...set].sort();
+  }, [users]);
+
+  const asanaWorkspaceOptions = useMemo(() => {
+    const workspaceToCompanyNames = new Map<string, Set<string>>();
+    for (const company of companies) {
+      if (!company.asanaWorkspaceId) continue;
+      const names = workspaceToCompanyNames.get(company.asanaWorkspaceId) ?? new Set();
+      names.add(company.name);
+      workspaceToCompanyNames.set(company.asanaWorkspaceId, names);
+    }
+    return [...workspaceToCompanyNames.entries()]
+      .map(([workspaceId, nameSet]) => {
+        const names = [...nameSet].sort();
+        const label =
+          names.length > 2
+            ? `${names.slice(0, 2).join(", ")} +${names.length - 2} · …${workspaceId.slice(-8)}`
+            : `${names.join(", ")} · …${workspaceId.slice(-8)}`;
+        return { workspaceId, label };
+      })
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }, [companies]);
+
+  const filteredUsers = useMemo(() => {
+    let list = users;
+
+    if (allUsersWorkspace === "__none__") {
+      list = list.filter((user) => !companyWorkspaceMap.get(user.companyId));
+    } else if (allUsersWorkspace !== "all") {
+      list = list.filter((user) => companyWorkspaceMap.get(user.companyId) === allUsersWorkspace);
+    }
+
+    if (allUsersRole !== "all") {
+      list = list.filter((user) => user.role === allUsersRole);
+    }
+
+    const query = allUsersSearch.trim().toLowerCase();
+    if (query) {
+      list = list.filter((user) => {
+        const email = user.email.toLowerCase();
+        const companyName = (companyMap.get(user.companyId) ?? "").toLowerCase();
+        const ws = companyWorkspaceMap.get(user.companyId);
+        const workspaceMatch = ws ? ws.toLowerCase().includes(query) : false;
+        const roleMatch = formatRole(user.role).toLowerCase().includes(query);
+        return (
+          email.includes(query) ||
+          companyName.includes(query) ||
+          workspaceMatch ||
+          roleMatch ||
+          user.id.toLowerCase().includes(query)
+        );
+      });
+    }
+
+    return list;
+  }, [users, allUsersSearch, allUsersWorkspace, allUsersRole, companyMap, companyWorkspaceMap]);
+
   const filteredSheets = useMemo(() => {
     const query = search.trim().toLowerCase();
     return submittedSheets.filter((sheet) => {
@@ -119,8 +181,51 @@ export function SuperAdminReviewPanel({ users, companies, workspaceAdmins, proje
     <div className="space-y-6">
       <div className="space-y-3">
         <h2 className="text-lg font-medium">All Users (All Companies)</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <input
+            className="rounded-md border border-zinc-700 bg-zinc-950 p-2 text-sm"
+            placeholder="Search email, company, workspace id, role…"
+            value={allUsersSearch}
+            onChange={(event) => setAllUsersSearch(event.target.value)}
+            aria-label="Search users"
+          />
+          <select
+            className="rounded-md border border-zinc-700 bg-zinc-950 p-2 text-sm"
+            value={allUsersWorkspace}
+            onChange={(event) => setAllUsersWorkspace(event.target.value)}
+            aria-label="Filter by Asana workspace"
+          >
+            <option value="all">All Asana workspaces</option>
+            <option value="__none__">No workspace synced</option>
+            {asanaWorkspaceOptions.map(({ workspaceId, label }) => (
+              <option key={workspaceId} value={workspaceId}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <select
+            className="rounded-md border border-zinc-700 bg-zinc-950 p-2 text-sm"
+            value={allUsersRole}
+            onChange={(event) => setAllUsersRole(event.target.value)}
+            aria-label="Filter by role"
+          >
+            <option value="all">All roles</option>
+            {distinctRoles.map((role) => (
+              <option key={role} value={role}>
+                {formatRole(role)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="text-xs text-zinc-500">
+          Showing {filteredUsers.length} of {users.length} users
+          {allUsersSearch.trim() || allUsersWorkspace !== "all" || allUsersRole !== "all" ? " (filters on)" : ""}.
+        </p>
         <Card className="divide-y divide-zinc-800">
-          {users.map((user) => {
+          {filteredUsers.length === 0 ? (
+            <div className="p-6 text-center text-sm text-zinc-500">No users match the current filters.</div>
+          ) : null}
+          {filteredUsers.map((user) => {
             const companyName = companyMap.get(user.companyId) ?? user.companyId;
             const workspaceId = companyWorkspaceMap.get(user.companyId);
             const pokerEnabled =
