@@ -5,6 +5,7 @@ import { userHasAnyIntegrationConnectionByClerkUserId } from "@/lib/integrations
 const isProtectedRoute = createRouteMatcher([
   "/time(.*)",
   "/timesheet(.*)",
+  "/dashboard(.*)",
   "/admin(.*)",
   "/poker-planning(.*)",
   "/settings(.*)",
@@ -15,6 +16,7 @@ const isProtectedRoute = createRouteMatcher([
 const requiresIntegrationSetup = createRouteMatcher([
   "/time(.*)",
   "/timesheet(.*)",
+  "/dashboard(.*)",
   "/admin(.*)",
   "/poker-planning(.*)",
   "/settings(.*)",

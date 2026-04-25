@@ -1,9 +1,17 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 
 export default async function Home() {
   const { userId } = await auth();
+  if (userId) {
+    const user = await getOrCreateCurrentUser();
+    if (user?.role === "user") {
+      redirect("/dashboard");
+    }
+  }
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col justify-center gap-6 px-6">

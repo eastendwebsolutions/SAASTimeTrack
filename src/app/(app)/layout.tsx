@@ -55,6 +55,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     : null;
   const canSeeAdmin = Boolean(user && canReviewEntries(user.role));
   const canSeePokerPlanning = Boolean(user);
+  const appHomeHref = user?.role === "user" ? "/dashboard" : "/time";
 
   const latestSyncedAt = latestSuccessfulRun?.endedAt;
   const latestSyncLabel = latestSyncedAt
@@ -74,10 +75,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <header className="border-b border-zinc-800 bg-zinc-950/90 px-6 py-4 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <div className="flex items-center gap-6">
-            <Link href="/time" className="font-semibold text-indigo-300">
+            <Link href={appHomeHref} className="font-semibold text-indigo-300">
               SaaSTimeTrack
             </Link>
             <nav className="flex items-center gap-4 text-sm text-zinc-300">
+              <Link href="/dashboard">Dashboard</Link>
               <Link href="/time">Time Entry</Link>
               <div className="group relative">
                 <Link href="/timesheet" className="inline-flex items-center gap-1">

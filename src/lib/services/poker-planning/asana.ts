@@ -23,7 +23,7 @@ type AsanaCustomField = {
   enum_options?: Array<{ gid: string; name: string }>;
 };
 
-async function getAsanaAccessTokenForUser(userId: string) {
+export async function getAsanaAccessTokenForUser(userId: string) {
   const connection = await db.query.asanaConnections.findFirst({
     where: eq(asanaConnections.userId, userId),
   });
