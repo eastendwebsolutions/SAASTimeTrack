@@ -7,6 +7,14 @@ import { getDashboardIntegrationTaskWidget } from "@/lib/services/dashboard-inte
 import { getDashboardPokerOutlook } from "@/lib/services/dashboard-poker-outlook";
 import { formatHoursFromMinutes, getDashboardTimeSummary } from "@/lib/services/dashboard-time-summary";
 
+function formatDateTimeSafe(date: Date, timezone: string) {
+  try {
+    return date.toLocaleString("en-US", { timeZone: timezone });
+  } catch {
+    return date.toLocaleString("en-US", { timeZone: "UTC" });
+  }
+}
+
 export default async function DashboardPage() {
   const user = await getOrCreateCurrentUser();
   if (!user) {
@@ -110,7 +118,7 @@ export default async function DashboardPage() {
             <div className="mt-4 space-y-3 text-sm text-zinc-300">
               <p className="font-medium text-zinc-100">{pokerOutlook.sessionTitle}</p>
               {pokerOutlook.completedAt ? (
-                <p className="text-xs text-zinc-500">Completed {pokerOutlook.completedAt.toLocaleString("en-US", { timeZone: tz })}</p>
+                <p className="text-xs text-zinc-500">Completed {formatDateTimeSafe(pokerOutlook.completedAt, tz)}</p>
               ) : null}
               <dl className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-3">
