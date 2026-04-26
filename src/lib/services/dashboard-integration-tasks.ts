@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { companies, projects, tasks } from "@/lib/db/schema";
 import { getAsanaAccessTokenForUser } from "@/lib/services/poker-planning/asana";
 import type { IntegrationProvider } from "@/lib/integrations/provider";
+import { withProjectsProviderColumnFallback } from "@/lib/integrations/projects-provider-fallback";
 
 function calendarYmdInTimeZone(date: Date, timeZone: string) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -14,18 +15,27 @@ function calendarYmdInTimeZone(date: Date, timeZone: string) {
 }
 
 async function countAssignedFromDb(userId: string, provider: IntegrationProvider) {
-  const [row] = await db
-    .select({ n: count() })
-    .from(tasks)
-    .innerJoin(projects, eq(projects.id, tasks.projectId))
-    .where(
-      and(
-        eq(tasks.assignedUserId, userId),
-        eq(tasks.isActive, true),
-        eq(projects.syncedByUserId, userId),
-        eq(projects.provider, provider),
-      ),
-    );
+  const [row] = await withProjectsProviderColumnFallback(
+    () =>
+      db
+        .select({ n: count() })
+        .from(tasks)
+        .innerJoin(projects, eq(projects.id, tasks.projectId))
+        .where(
+          and(
+            eq(tasks.assignedUserId, userId),
+            eq(tasks.isActive, true),
+            eq(projects.syncedByUserId, userId),
+            eq(projects.provider, provider),
+          ),
+        ),
+    () =>
+      db
+        .select({ n: count() })
+        .from(tasks)
+        .innerJoin(projects, eq(projects.id, tasks.projectId))
+        .where(and(eq(tasks.assignedUserId, userId), eq(tasks.isActive, true), eq(projects.syncedByUserId, userId))),
+  );
   return Number(row?.n ?? 0);
 }
 
