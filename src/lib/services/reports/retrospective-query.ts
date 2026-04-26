@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { reportingSprints, reportingTasks, reportingWorkspaces, timeEntries, timesheets, users } from "@/lib/db/schema";
+import { isMissingIntegrationSchemaError } from "@/lib/integrations/schema-compat";
 import { buildDateRangeComparisonPeriods, coercePeriodKeyFromDate } from "@/lib/services/reports/period-comparison";
 import { resolveReportScope, resolveScopedTeamMembers } from "@/lib/services/reports/scope";
 import type { RetrospectiveFilters } from "@/lib/services/reports/types";
@@ -114,7 +115,7 @@ export async function getRetrospectiveFiltersData(
   const canSelectCompany = currentUser.role === "super_admin";
   const companyId = canSelectCompany ? (selectedCompanyId ?? currentUser.companyId) : currentUser.companyId;
 
-  const [companies, workspaces, allUsers] = await Promise.all([
+  const [companies, allUsers] = await Promise.all([
     canSelectCompany
       ? db.query.companies.findMany({
           columns: { id: true, name: true },
@@ -124,23 +125,26 @@ export async function getRetrospectiveFiltersData(
           where: (table, { eq: eqFn }) => eqFn(table.id, companyId),
           columns: { id: true, name: true },
         }),
-    db.query.reportingWorkspaces.findMany({
-      where: currentUser.role === "super_admin" ? undefined : eq(reportingWorkspaces.companyId, companyId),
-      columns: {
-        id: true,
-        companyId: true,
-        integrationType: true,
-        externalWorkspaceId: true,
-        workspaceName: true,
-      },
-      orderBy: (table, { asc: ascFn }) => [ascFn(table.workspaceName)],
-    }),
     db.query.users.findMany({
       where: eq(users.companyId, companyId),
       columns: { id: true, email: true },
       orderBy: (table, { asc: ascFn }) => [ascFn(table.email)],
     }),
   ]);
+  const workspaces = await db.query.reportingWorkspaces.findMany({
+    where: currentUser.role === "super_admin" ? undefined : eq(reportingWorkspaces.companyId, companyId),
+    columns: {
+      id: true,
+      companyId: true,
+      integrationType: true,
+      externalWorkspaceId: true,
+      workspaceName: true,
+    },
+    orderBy: (table, { asc: ascFn }) => [ascFn(table.workspaceName)],
+  }).catch((error) => {
+    if (isMissingIntegrationSchemaError(error)) return [];
+    throw error;
+  });
 
   return {
     companies,
@@ -477,7 +481,11 @@ export async function listProjectsForWorkspace(companyId: string, integrationTyp
       eq(reportingTasks.integrationType, integrationType as "asana" | "jira" | "monday"),
       eq(reportingTasks.externalWorkspaceId, workspaceId),
     ))
-    .orderBy(asc(reportingTasks.projectName));
+    .orderBy(asc(reportingTasks.projectName))
+    .catch((error) => {
+      if (isMissingIntegrationSchemaError(error)) return [];
+      throw error;
+    });
 
   return projectRows.filter((row) => row.id).map((row) => ({ id: row.id as string, name: row.name ?? "Unnamed project" }));
 }
@@ -491,7 +499,11 @@ export async function listStatusesForWorkspace(companyId: string, integrationTyp
       eq(reportingTasks.integrationType, integrationType as "asana" | "jira" | "monday"),
       eq(reportingTasks.externalWorkspaceId, workspaceId),
     ))
-    .orderBy(asc(reportingTasks.taskStatus));
+    .orderBy(asc(reportingTasks.taskStatus))
+    .catch((error) => {
+      if (isMissingIntegrationSchemaError(error)) return [];
+      throw error;
+    });
 
   return statusRows.map((row) => row.status).filter(Boolean) as string[];
 }

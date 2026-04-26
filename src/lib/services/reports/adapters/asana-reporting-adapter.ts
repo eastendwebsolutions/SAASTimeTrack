@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { integrationFieldMappings, reportingSprints, reportingTasks, reportingWorkspaces } from "@/lib/db/schema";
+import { isMissingIntegrationSchemaError } from "@/lib/integrations/schema-compat";
 import type {
   IntegrationReportingAdapter,
   NormalizedSprint,
@@ -15,6 +16,9 @@ export class AsanaReportingAdapter implements IntegrationReportingAdapter {
     const rows = await db.query.reportingWorkspaces.findMany({
       where: and(eq(reportingWorkspaces.companyId, companyId), eq(reportingWorkspaces.integrationType, "asana")),
       orderBy: (table, { asc }) => [asc(table.workspaceName)],
+    }).catch((error) => {
+      if (isMissingIntegrationSchemaError(error)) return [];
+      throw error;
     });
     return rows.map((row) => ({
       externalIntegrationType: "asana",
@@ -34,6 +38,9 @@ export class AsanaReportingAdapter implements IntegrationReportingAdapter {
         eq(reportingSprints.externalWorkspaceId, workspaceId),
       ),
       orderBy: (table, { desc }) => [desc(table.endDate)],
+    }).catch((error) => {
+      if (isMissingIntegrationSchemaError(error)) return [];
+      throw error;
     });
     return rows.map((row) => ({
       externalIntegrationType: "asana",
@@ -56,6 +63,9 @@ export class AsanaReportingAdapter implements IntegrationReportingAdapter {
         eq(reportingTasks.integrationType, "asana"),
         eq(reportingTasks.externalWorkspaceId, workspaceId),
       ),
+    }).catch((error) => {
+      if (isMissingIntegrationSchemaError(error)) return [];
+      throw error;
     });
 
     return rows.map((row) => ({
@@ -98,6 +108,9 @@ export async function getAsanaReportingMapping(companyId: string) {
       eq(integrationFieldMappings.isActive, true),
     ),
     orderBy: (table, { asc }) => [asc(table.mappingKey)],
+  }).catch((error) => {
+    if (isMissingIntegrationSchemaError(error)) return [];
+    throw error;
   });
 
   return rows.reduce<Record<string, { id: string | null; name: string | null }>>((acc, row) => {
