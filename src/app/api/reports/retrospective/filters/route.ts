@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { companies, reportingSprints } from "@/lib/db/schema";
+import { companies, reportingSprints, timeEntries, users } from "@/lib/db/schema";
 import { getReportingAdapter } from "@/lib/services/reports/adapter-registry";
 import { getRetrospectiveFiltersData, listProjectsForWorkspace, listStatusesForWorkspace } from "@/lib/services/reports/retrospective-query";
 import { requireReportUser, toServerErrorResponse } from "@/app/api/reports/retrospective/_shared";
@@ -56,6 +56,20 @@ export async function GET(request: NextRequest) {
 
     const projects = workspaceId ? await listProjectsForWorkspace(companyId, integrationType, workspaceId) : [];
     const taskStatuses = workspaceId ? await listStatusesForWorkspace(companyId, integrationType, workspaceId) : [];
+    const workspaceUsers = workspaceId
+      ? await db
+          .selectDistinct({
+            id: users.id,
+            email: users.email,
+          })
+          .from(timeEntries)
+          .innerJoin(users, eq(users.id, timeEntries.userId))
+          .where(and(
+            eq(timeEntries.companyId, companyId),
+            eq(timeEntries.integrationType, integrationType),
+            eq(timeEntries.externalWorkspaceId, workspaceId),
+          ))
+      : [];
 
     return NextResponse.json({
       ...base,
@@ -64,6 +78,7 @@ export async function GET(request: NextRequest) {
       sprints,
       projects,
       taskStatuses,
+      workspaceUsers,
     });
   } catch (error) {
     return toServerErrorResponse(error);

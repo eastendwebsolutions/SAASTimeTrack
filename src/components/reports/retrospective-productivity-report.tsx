@@ -20,6 +20,7 @@ type FiltersPayload = {
   projects: Array<{ id: string; name: string }>;
   taskStatuses: string[];
   defaultWorkspaceId?: string | null;
+  workspaceUsers?: Array<{ id: string; email: string }>;
 };
 
 type SummaryPayload = {
@@ -118,6 +119,7 @@ export function RetrospectiveProductivityReport() {
   const [reportError, setReportError] = useState<string | null>(null);
   const [filtersReloadToken, setFiltersReloadToken] = useState(0);
   const [periodChoice, setPeriodChoice] = useState<"sprint" | "date_range">("date_range");
+  const [teamMemberAllSelected, setTeamMemberAllSelected] = useState(true);
 
   const filtersQuery = useMemo(() => {
     const params = new URLSearchParams();
@@ -149,8 +151,10 @@ export function RetrospectiveProductivityReport() {
             setSelectedWorkspaceId(payload.workspaces[0].workspace.externalWorkspaceId);
           }
         }
-        if (!selectedTeamMembers.length && payload.users.length) {
-          setSelectedTeamMembers(payload.users.map((u) => u.id));
+        const scopedUsers = payload.workspaceUsers?.length ? payload.workspaceUsers : payload.users;
+        if (!selectedTeamMembers.length && scopedUsers.length) {
+          setSelectedTeamMembers(scopedUsers.map((u) => u.id));
+          setTeamMemberAllSelected(true);
         }
       } catch (error) {
         if (!mounted) return;
@@ -214,13 +218,14 @@ export function RetrospectiveProductivityReport() {
     }
     if (selectedProjectId) params.set("projectId", selectedProjectId);
     if (selectedTaskStatus) params.set("taskStatus", selectedTaskStatus);
-    if (selectedTeamMembers.length && filtersData?.users.length && selectedTeamMembers.length !== filtersData.users.length) {
+    const scopedUsers = filtersData?.workspaceUsers?.length ? filtersData.workspaceUsers : filtersData?.users ?? [];
+    if (!teamMemberAllSelected && selectedTeamMembers.length && selectedTeamMembers.length !== scopedUsers.length) {
       params.set("teamMemberIds", selectedTeamMembers.join(","));
     } else {
       params.set("teamMemberIds", "all");
     }
     return params.toString();
-  }, [selectedIntegration, selectedWorkspaceId, periodMode, selectedCompanyId, selectedSprintId, startDate, endDate, selectedTeamMembers, filtersData, selectedProjectId, selectedTaskStatus]);
+  }, [selectedIntegration, selectedWorkspaceId, periodMode, selectedCompanyId, selectedSprintId, startDate, endDate, selectedTeamMembers, filtersData, selectedProjectId, selectedTaskStatus, teamMemberAllSelected]);
 
   async function runReport() {
     setLoadingReport(true);
@@ -292,6 +297,8 @@ export function RetrospectiveProductivityReport() {
     }
     return <div className="animate-pulse text-sm text-zinc-400">Loading report configuration...</div>;
   }
+
+  const availableTeamMembers = filtersData.workspaceUsers?.length ? filtersData.workspaceUsers : filtersData.users;
 
   return (
     <section className="space-y-6">
@@ -376,24 +383,47 @@ export function RetrospectiveProductivityReport() {
           </>
         )}
 
-        <label className="text-sm md:col-span-2">
+        <div className="text-sm md:col-span-2">
           <span className="mb-1 block text-zinc-400">Team members</span>
-          <select
-            multiple
-            className="h-24 w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2"
-            value={selectedTeamMembers}
-            onChange={(e) => {
-              const values = Array.from(e.target.selectedOptions).map((option) => option.value);
-              setSelectedTeamMembers(values);
-            }}
-          >
-            {filtersData.users.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.email}
-              </option>
-            ))}
-          </select>
-        </label>
+          <div className="rounded-md border border-zinc-700 bg-zinc-900 p-2">
+            <label className="mb-2 flex items-center gap-2 text-zinc-200">
+              <input
+                type="checkbox"
+                checked={teamMemberAllSelected}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setTeamMemberAllSelected(checked);
+                  if (checked) setSelectedTeamMembers(availableTeamMembers.map((member) => member.id));
+                }}
+              />
+              All workspace members
+            </label>
+            <div className="max-h-28 space-y-1 overflow-auto border-t border-zinc-800 pt-2">
+              {availableTeamMembers.map((member) => {
+                const checked = selectedTeamMembers.includes(member.id);
+                return (
+                  <label key={member.id} className="flex items-center gap-2 text-zinc-300">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        const isChecked = e.target.checked;
+                        setTeamMemberAllSelected(false);
+                        setSelectedTeamMembers((prev) =>
+                          isChecked ? Array.from(new Set([...prev, member.id])) : prev.filter((id) => id !== member.id),
+                        );
+                      }}
+                    />
+                    <span className="truncate">{member.email}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-xs text-zinc-500">
+              {teamMemberAllSelected ? `All ${availableTeamMembers.length} selected` : `${selectedTeamMembers.length} selected`}
+            </p>
+          </div>
+        </div>
         <label className="text-sm">
           <span className="mb-1 block text-zinc-400">Project (optional)</span>
           <select className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2" value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)}>
