@@ -46,17 +46,18 @@ export async function POST(request: NextRequest) {
       eq(integrationFieldMappings.scopeType, "company"),
     ));
     if (payload.mappings.length) {
-      await db.insert(integrationFieldMappings).values(payload.mappings.map((mapping) => ({
+      const mappingRows: Array<typeof integrationFieldMappings.$inferInsert> = payload.mappings.map((mapping) => ({
         companyId: user.companyId,
         integrationType: payload.integrationType,
-        scopeType: "company",
+        scopeType: "company" as const,
         mappingKey: mapping.mappingKey,
         externalFieldId: mapping.externalFieldId ?? null,
         externalFieldName: mapping.externalFieldName ?? null,
         externalFieldType: mapping.externalFieldType ?? null,
         isActive: true,
         createdByUserId: user.id,
-      })));
+      }));
+      await db.insert(integrationFieldMappings).values(mappingRows);
     }
 
     return NextResponse.json({ ok: true });

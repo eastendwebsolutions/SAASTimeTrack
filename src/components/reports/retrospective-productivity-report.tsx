@@ -205,7 +205,7 @@ export function RetrospectiveProductivityReport() {
   }
 
   async function saveMappings() {
-    if (!filtersData.canManageMappings) return;
+    if (!filtersData || !filtersData.canManageMappings) return;
     const payload = {
       integrationType: selectedIntegration,
       mappings: Object.entries(mappingFields).map(([mappingKey, externalFieldName]) => ({
