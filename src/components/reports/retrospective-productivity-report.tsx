@@ -120,6 +120,12 @@ export function RetrospectiveProductivityReport() {
   const [filtersReloadToken, setFiltersReloadToken] = useState(0);
   const [periodChoice, setPeriodChoice] = useState<"sprint" | "date_range">("date_range");
   const [teamMemberAllSelected, setTeamMemberAllSelected] = useState(true);
+  const [integrationSearch, setIntegrationSearch] = useState("Asana");
+  const [workspaceSearch, setWorkspaceSearch] = useState("");
+  const [sprintSearch, setSprintSearch] = useState("");
+  const [projectSearch, setProjectSearch] = useState("");
+  const [statusSearch, setStatusSearch] = useState("");
+  const [teamMemberSearch, setTeamMemberSearch] = useState("");
 
   const filtersQuery = useMemo(() => {
     const params = new URLSearchParams();
@@ -147,8 +153,11 @@ export function RetrospectiveProductivityReport() {
         if (!selectedWorkspaceId) {
           if (payload.defaultWorkspaceId) {
             setSelectedWorkspaceId(payload.defaultWorkspaceId);
+            const workspaceByDefault = payload.workspaces.find((item) => item.workspace.externalWorkspaceId === payload.defaultWorkspaceId);
+            if (workspaceByDefault) setWorkspaceSearch(workspaceByDefault.workspace.workspaceName);
           } else if (payload.workspaces[0]) {
             setSelectedWorkspaceId(payload.workspaces[0].workspace.externalWorkspaceId);
+            setWorkspaceSearch(payload.workspaces[0].workspace.workspaceName);
           }
         }
         const scopedUsers = payload.workspaceUsers?.length ? payload.workspaceUsers : payload.users;
@@ -187,8 +196,19 @@ export function RetrospectiveProductivityReport() {
   useEffect(() => {
     if (periodChoice === "sprint" && !selectedSprintId && filtersData?.sprints?.[0]) {
       setSelectedSprintId(filtersData.sprints[0].externalSprintId);
+      setSprintSearch(filtersData.sprints[0].sprintName);
     }
   }, [periodChoice, selectedSprintId, filtersData]);
+
+  useEffect(() => {
+    const project = filtersData?.projects.find((item) => item.id === selectedProjectId);
+    if (project) setProjectSearch(project.name);
+  }, [filtersData, selectedProjectId]);
+
+  useEffect(() => {
+    if (!selectedTaskStatus) return;
+    setStatusSearch(selectedTaskStatus);
+  }, [selectedTaskStatus]);
 
   useEffect(() => {
     async function loadMappings() {
@@ -299,6 +319,56 @@ export function RetrospectiveProductivityReport() {
   }
 
   const availableTeamMembers = filtersData.workspaceUsers?.length ? filtersData.workspaceUsers : filtersData.users;
+  const selectedTeamMemberItems = availableTeamMembers.filter((member) => selectedTeamMembers.includes(member.id));
+
+  function updateIntegrationFromSearch(value: string) {
+    setIntegrationSearch(value);
+    const normalized = value.trim().toLowerCase();
+    const entry = Object.entries(INTEGRATION_META).find(([, meta]) => meta.label.toLowerCase() === normalized);
+    if (entry) setSelectedIntegration(entry[0]);
+  }
+
+  function updateWorkspaceFromSearch(value: string) {
+    setWorkspaceSearch(value);
+    if (!filtersData) return;
+    const normalized = value.trim().toLowerCase();
+    const match = filtersData.workspaces.find((item) => item.workspace.workspaceName.trim().toLowerCase() === normalized);
+    if (match) setSelectedWorkspaceId(match.workspace.externalWorkspaceId);
+  }
+
+  function updateSprintFromSearch(value: string) {
+    setSprintSearch(value);
+    if (!filtersData) return;
+    const normalized = value.trim().toLowerCase();
+    const match = filtersData.sprints.find((item) => item.sprintName.trim().toLowerCase() === normalized);
+    setSelectedSprintId(match?.externalSprintId ?? "");
+  }
+
+  function updateProjectFromSearch(value: string) {
+    setProjectSearch(value);
+    if (!filtersData) return;
+    const normalized = value.trim().toLowerCase();
+    const match = filtersData.projects.find((item) => item.name.trim().toLowerCase() === normalized);
+    setSelectedProjectId(match?.id ?? "");
+  }
+
+  function updateStatusFromSearch(value: string) {
+    setStatusSearch(value);
+    if (!filtersData) return;
+    const normalized = value.trim().toLowerCase();
+    const match = filtersData.taskStatuses.find((item) => item.trim().toLowerCase() === normalized);
+    setSelectedTaskStatus(match ?? "");
+  }
+
+  function addTeamMemberFromSearch(value: string) {
+    setTeamMemberSearch(value);
+    const normalized = value.trim().toLowerCase();
+    const match = availableTeamMembers.find((member) => member.email.trim().toLowerCase() === normalized);
+    if (!match) return;
+    setTeamMemberAllSelected(false);
+    setSelectedTeamMembers((prev) => Array.from(new Set([...prev, match.id])));
+    setTeamMemberSearch("");
+  }
 
   return (
     <section className="space-y-6">
@@ -332,23 +402,33 @@ export function RetrospectiveProductivityReport() {
         ) : null}
         <label className="text-sm">
           <span className="mb-1 block text-zinc-400">Integration</span>
-          <select className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2" value={selectedIntegration} onChange={(e) => setSelectedIntegration(e.target.value)}>
+          <input
+            type="text"
+            list="report-integration-options"
+            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2"
+            value={integrationSearch}
+            onChange={(e) => updateIntegrationFromSearch(e.target.value)}
+          />
+          <datalist id="report-integration-options">
             {filtersData.integrationTypes.map((item) => (
-              <option key={item} value={item}>
-                {(INTEGRATION_META[item]?.icon ?? "•")} {(INTEGRATION_META[item]?.label ?? item.charAt(0).toUpperCase() + item.slice(1))}
-              </option>
+              <option key={item} value={INTEGRATION_META[item]?.label ?? item} />
             ))}
-          </select>
+          </datalist>
         </label>
         <label className="text-sm">
           <span className="mb-1 block text-zinc-400">Workspace</span>
-          <select className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2" value={selectedWorkspaceId} onChange={(e) => setSelectedWorkspaceId(e.target.value)}>
+          <input
+            type="text"
+            list="report-workspace-options"
+            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2"
+            value={workspaceSearch}
+            onChange={(e) => updateWorkspaceFromSearch(e.target.value)}
+          />
+          <datalist id="report-workspace-options">
             {filtersData.workspaces.map((item) => (
-              <option key={item.workspace.externalWorkspaceId} value={item.workspace.externalWorkspaceId}>
-                {item.workspace.workspaceName}
-              </option>
+              <option key={item.workspace.externalWorkspaceId} value={item.workspace.workspaceName} />
             ))}
-          </select>
+          </datalist>
         </label>
         <label className="text-sm">
           <span className="mb-1 block text-zinc-400">Report period</span>
@@ -365,10 +445,16 @@ export function RetrospectiveProductivityReport() {
         {periodMode === "sprint" ? (
           <label className="text-sm md:col-span-2">
             <span className="mb-1 block text-zinc-400">Sprint</span>
-            <select className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2" value={selectedSprintId} onChange={(e) => setSelectedSprintId(e.target.value)}>
-              <option value="">Select sprint</option>
-              {filtersData.sprints.map((item) => <option key={item.externalSprintId} value={item.externalSprintId}>{item.sprintName}</option>)}
-            </select>
+            <input
+              type="text"
+              list="report-sprint-options"
+              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2"
+              value={sprintSearch}
+              onChange={(e) => updateSprintFromSearch(e.target.value)}
+            />
+            <datalist id="report-sprint-options">
+              {filtersData.sprints.map((item) => <option key={item.externalSprintId} value={item.sprintName} />)}
+            </datalist>
           </label>
         ) : (
           <>
@@ -399,6 +485,37 @@ export function RetrospectiveProductivityReport() {
               All workspace members
             </label>
             <div className="max-h-28 space-y-1 overflow-auto border-t border-zinc-800 pt-2">
+              <input
+                type="text"
+                list="report-team-member-options"
+                className="mb-2 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-zinc-200"
+                placeholder="Search and add team member..."
+                value={teamMemberSearch}
+                onChange={(e) => addTeamMemberFromSearch(e.target.value)}
+                disabled={teamMemberAllSelected}
+              />
+              <datalist id="report-team-member-options">
+                {availableTeamMembers.map((member) => (
+                  <option key={member.id} value={member.email} />
+                ))}
+              </datalist>
+              {selectedTeamMemberItems.length ? (
+                <div className="mb-2 flex flex-wrap gap-1">
+                  {selectedTeamMemberItems.map((member) => (
+                    <button
+                      key={`chip-${member.id}`}
+                      type="button"
+                      className="rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-200"
+                      onClick={() => {
+                        setTeamMemberAllSelected(false);
+                        setSelectedTeamMembers((prev) => prev.filter((id) => id !== member.id));
+                      }}
+                    >
+                      {member.email} ×
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {availableTeamMembers.map((member) => {
                 const checked = selectedTeamMembers.includes(member.id);
                 return (
@@ -426,17 +543,31 @@ export function RetrospectiveProductivityReport() {
         </div>
         <label className="text-sm">
           <span className="mb-1 block text-zinc-400">Project (optional)</span>
-          <select className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2" value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)}>
-            <option value="">All projects</option>
-            {filtersData.projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-          </select>
+          <input
+            type="text"
+            list="report-project-options"
+            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2"
+            value={projectSearch}
+            onChange={(e) => updateProjectFromSearch(e.target.value)}
+            placeholder="All projects"
+          />
+          <datalist id="report-project-options">
+            {filtersData.projects.map((project) => <option key={project.id} value={project.name} />)}
+          </datalist>
         </label>
         <label className="text-sm">
           <span className="mb-1 block text-zinc-400">Task status (optional)</span>
-          <select className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2" value={selectedTaskStatus} onChange={(e) => setSelectedTaskStatus(e.target.value)}>
-            <option value="">All statuses</option>
-            {filtersData.taskStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
-          </select>
+          <input
+            type="text"
+            list="report-status-options"
+            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2"
+            value={statusSearch}
+            onChange={(e) => updateStatusFromSearch(e.target.value)}
+            placeholder="All statuses"
+          />
+          <datalist id="report-status-options">
+            {filtersData.taskStatuses.map((status) => <option key={status} value={status} />)}
+          </datalist>
         </label>
       </Card>
       <div className="flex justify-end">
