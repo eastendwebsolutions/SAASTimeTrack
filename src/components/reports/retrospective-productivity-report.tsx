@@ -19,6 +19,7 @@ type FiltersPayload = {
   canManageMappings: boolean;
   projects: Array<{ id: string; name: string }>;
   taskStatuses: string[];
+  defaultWorkspaceId?: string | null;
 };
 
 type SummaryPayload = {
@@ -85,6 +86,12 @@ function formatNumber(value: number | null, digits = 1) {
   return value.toFixed(digits);
 }
 
+const INTEGRATION_META: Record<string, { label: string; icon: string }> = {
+  asana: { label: "Asana", icon: "🟣" },
+  jira: { label: "Jira", icon: "🔵" },
+  monday: { label: "Monday", icon: "🟠" },
+};
+
 export function RetrospectiveProductivityReport() {
   const [filtersData, setFiltersData] = useState<FiltersPayload | null>(null);
   const [loadingFilters, setLoadingFilters] = useState(true);
@@ -110,6 +117,7 @@ export function RetrospectiveProductivityReport() {
   const [filtersError, setFiltersError] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [filtersReloadToken, setFiltersReloadToken] = useState(0);
+  const [periodChoice, setPeriodChoice] = useState<"sprint" | "date_range">("date_range");
 
   const filtersQuery = useMemo(() => {
     const params = new URLSearchParams();
@@ -134,8 +142,12 @@ export function RetrospectiveProductivityReport() {
         if (!mounted) return;
         setFiltersData(payload);
         if (!selectedCompanyId && payload.companies[0]) setSelectedCompanyId(payload.companies[0].id);
-        if (!selectedWorkspaceId && payload.workspaces[0]) {
-          setSelectedWorkspaceId(payload.workspaces[0].workspace.externalWorkspaceId);
+        if (!selectedWorkspaceId) {
+          if (payload.defaultWorkspaceId) {
+            setSelectedWorkspaceId(payload.defaultWorkspaceId);
+          } else if (payload.workspaces[0]) {
+            setSelectedWorkspaceId(payload.workspaces[0].workspace.externalWorkspaceId);
+          }
         }
         if (!selectedTeamMembers.length && payload.users.length) {
           setSelectedTeamMembers(payload.users.map((u) => u.id));
@@ -153,6 +165,26 @@ export function RetrospectiveProductivityReport() {
       mounted = false;
     };
   }, [filtersQuery, selectedCompanyId, selectedTeamMembers.length, selectedWorkspaceId, filtersReloadToken]);
+
+  useEffect(() => {
+    if (startDate && endDate) return;
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 6);
+    const toYmd = (value: Date) => value.toISOString().slice(0, 10);
+    setStartDate(toYmd(start));
+    setEndDate(toYmd(end));
+  }, [startDate, endDate]);
+
+  useEffect(() => {
+    if (periodMode !== periodChoice) setPeriodMode(periodChoice);
+  }, [periodChoice, periodMode]);
+
+  useEffect(() => {
+    if (periodChoice === "sprint" && !selectedSprintId && filtersData?.sprints?.[0]) {
+      setSelectedSprintId(filtersData.sprints[0].externalSprintId);
+    }
+  }, [periodChoice, selectedSprintId, filtersData]);
 
   useEffect(() => {
     async function loadMappings() {
@@ -216,13 +248,10 @@ export function RetrospectiveProductivityReport() {
     }
   }
 
-  useEffect(() => {
-    if (!selectedWorkspaceId) return;
-    if (periodMode === "sprint" && !selectedSprintId) return;
-    if (periodMode === "date_range" && (!startDate || !endDate)) return;
-    runReport();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportQuery]);
+  const canGenerate = Boolean(
+    selectedWorkspaceId
+    && (periodMode === "sprint" ? selectedSprintId : startDate && endDate),
+  );
 
   async function openDrilldown(taskId: string) {
     setDrillTaskId(taskId);
@@ -297,7 +326,11 @@ export function RetrospectiveProductivityReport() {
         <label className="text-sm">
           <span className="mb-1 block text-zinc-400">Integration</span>
           <select className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2" value={selectedIntegration} onChange={(e) => setSelectedIntegration(e.target.value)}>
-            {filtersData.integrationTypes.map((item) => <option key={item} value={item}>{item}</option>)}
+            {filtersData.integrationTypes.map((item) => (
+              <option key={item} value={item}>
+                {(INTEGRATION_META[item]?.icon ?? "•")} {(INTEGRATION_META[item]?.label ?? item.charAt(0).toUpperCase() + item.slice(1))}
+              </option>
+            ))}
           </select>
         </label>
         <label className="text-sm">
@@ -311,11 +344,15 @@ export function RetrospectiveProductivityReport() {
           </select>
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-zinc-400">Period Mode</span>
-          <select className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2" value={periodMode} onChange={(e) => setPeriodMode(e.target.value as "sprint" | "date_range")}>
-            <option value="sprint">Sprint</option>
-            <option value="date_range">Date range</option>
-          </select>
+          <span className="mb-1 block text-zinc-400">Report period</span>
+          <div className="flex gap-2">
+            <Button variant={periodChoice === "sprint" ? "primary" : "secondary"} type="button" onClick={() => setPeriodChoice("sprint")}>
+              Sprint
+            </Button>
+            <Button variant={periodChoice === "date_range" ? "primary" : "secondary"} type="button" onClick={() => setPeriodChoice("date_range")}>
+              Date Range
+            </Button>
+          </div>
         </label>
 
         {periodMode === "sprint" ? (
@@ -372,6 +409,11 @@ export function RetrospectiveProductivityReport() {
           </select>
         </label>
       </Card>
+      <div className="flex justify-end">
+        <Button type="button" onClick={runReport} disabled={!canGenerate || loadingReport}>
+          {loadingReport ? "Generating..." : "Generate Report"}
+        </Button>
+      </div>
 
       <Card className="p-4">
         <div className="mb-3 flex items-center justify-between">

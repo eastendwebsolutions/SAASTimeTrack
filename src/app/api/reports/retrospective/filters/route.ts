@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { reportingSprints } from "@/lib/db/schema";
+import { companies, reportingSprints } from "@/lib/db/schema";
 import { getReportingAdapter } from "@/lib/services/reports/adapter-registry";
 import { getRetrospectiveFiltersData, listProjectsForWorkspace, listStatusesForWorkspace } from "@/lib/services/reports/retrospective-query";
 import { requireReportUser, toServerErrorResponse } from "@/app/api/reports/retrospective/_shared";
@@ -17,6 +17,26 @@ export async function GET(request: NextRequest) {
     const companyId = user.role === "super_admin" && requestedCompanyId ? requestedCompanyId : user.companyId;
     const adapter = getReportingAdapter(integrationType);
     const base = await getRetrospectiveFiltersData(user, companyId);
+    const company = await db.query.companies.findFirst({
+      where: eq(companies.id, companyId),
+      columns: { asanaWorkspaceId: true },
+    });
+    const companyWorkspaceId = company?.asanaWorkspaceId?.trim() || null;
+    const adapterWorkspaces = await adapter.getWorkspaces(companyId);
+    const workspaces = [...adapterWorkspaces];
+    if (integrationType === "asana" && companyWorkspaceId) {
+      const exists = workspaces.some((item) => item.workspace.externalWorkspaceId === companyWorkspaceId);
+      if (!exists) {
+        workspaces.unshift({
+          externalIntegrationType: "asana",
+          externalIntegrationId: `company:${companyWorkspaceId}`,
+          workspace: {
+            externalWorkspaceId: companyWorkspaceId,
+            workspaceName: "My Asana Workspace",
+          },
+        });
+      }
+    }
     const sprints = workspaceId
       ? await db.query.reportingSprints.findMany({
           where: and(
@@ -39,7 +59,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       ...base,
-      workspaces: await adapter.getWorkspaces(companyId),
+      workspaces,
+      defaultWorkspaceId: companyWorkspaceId,
       sprints,
       projects,
       taskStatuses,
