@@ -107,6 +107,9 @@ export function RetrospectiveProductivityReport() {
   const [mappingFields, setMappingFields] = useState<Record<string, string>>({});
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [selectedTaskStatus, setSelectedTaskStatus] = useState("");
+  const [filtersError, setFiltersError] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [filtersReloadToken, setFiltersReloadToken] = useState(0);
 
   const filtersQuery = useMemo(() => {
     const params = new URLSearchParams();
@@ -119,25 +122,37 @@ export function RetrospectiveProductivityReport() {
   useEffect(() => {
     let mounted = true;
     async function loadFilters() {
-      setLoadingFilters(true);
-      const response = await fetch(`/api/reports/retrospective/filters?${filtersQuery}`, { cache: "no-store" });
-      const payload: FiltersPayload = await response.json();
-      if (!mounted) return;
-      setFiltersData(payload);
-      if (!selectedCompanyId && payload.companies[0]) setSelectedCompanyId(payload.companies[0].id);
-      if (!selectedWorkspaceId && payload.workspaces[0]) {
-        setSelectedWorkspaceId(payload.workspaces[0].workspace.externalWorkspaceId);
+      setFiltersError(null);
+      try {
+        setLoadingFilters(true);
+        const response = await fetch(`/api/reports/retrospective/filters?${filtersQuery}`, { cache: "no-store" });
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || "Failed to load report filters");
+        }
+        const payload: FiltersPayload = await response.json();
+        if (!mounted) return;
+        setFiltersData(payload);
+        if (!selectedCompanyId && payload.companies[0]) setSelectedCompanyId(payload.companies[0].id);
+        if (!selectedWorkspaceId && payload.workspaces[0]) {
+          setSelectedWorkspaceId(payload.workspaces[0].workspace.externalWorkspaceId);
+        }
+        if (!selectedTeamMembers.length && payload.users.length) {
+          setSelectedTeamMembers(payload.users.map((u) => u.id));
+        }
+      } catch (error) {
+        if (!mounted) return;
+        const message = error instanceof Error ? error.message : "Unable to load report configuration.";
+        setFiltersError(message);
+      } finally {
+        if (mounted) setLoadingFilters(false);
       }
-      if (!selectedTeamMembers.length && payload.users.length) {
-        setSelectedTeamMembers(payload.users.map((u) => u.id));
-      }
-      setLoadingFilters(false);
     }
     loadFilters();
     return () => {
       mounted = false;
     };
-  }, [filtersQuery, selectedCompanyId, selectedTeamMembers.length, selectedWorkspaceId]);
+  }, [filtersQuery, selectedCompanyId, selectedTeamMembers.length, selectedWorkspaceId, filtersReloadToken]);
 
   useEffect(() => {
     async function loadMappings() {
@@ -177,15 +192,28 @@ export function RetrospectiveProductivityReport() {
 
   async function runReport() {
     setLoadingReport(true);
-    const [summaryRes, trendsRes, tableRes] = await Promise.all([
-      fetch(`/api/reports/retrospective/summary?${reportQuery}`, { cache: "no-store" }),
-      fetch(`/api/reports/retrospective/trends?${reportQuery}`, { cache: "no-store" }),
-      fetch(`/api/reports/retrospective/table?${reportQuery}`, { cache: "no-store" }),
-    ]);
-    setSummary(await summaryRes.json());
-    setTrends(await trendsRes.json());
-    setTable(await tableRes.json());
-    setLoadingReport(false);
+    setReportError(null);
+    try {
+      const [summaryRes, trendsRes, tableRes] = await Promise.all([
+        fetch(`/api/reports/retrospective/summary?${reportQuery}`, { cache: "no-store" }),
+        fetch(`/api/reports/retrospective/trends?${reportQuery}`, { cache: "no-store" }),
+        fetch(`/api/reports/retrospective/table?${reportQuery}`, { cache: "no-store" }),
+      ]);
+      if (!summaryRes.ok || !trendsRes.ok || !tableRes.ok) {
+        throw new Error("Failed to load one or more report sections.");
+      }
+      setSummary(await summaryRes.json());
+      setTrends(await trendsRes.json());
+      setTable(await tableRes.json());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load report data.";
+      setReportError(message);
+      setSummary(null);
+      setTrends([]);
+      setTable([]);
+    } finally {
+      setLoadingReport(false);
+    }
   }
 
   useEffect(() => {
@@ -223,6 +251,16 @@ export function RetrospectiveProductivityReport() {
   }
 
   if (loadingFilters || !filtersData) {
+    if (filtersError) {
+      return (
+        <Card className="space-y-3 p-4">
+          <p className="text-sm text-rose-300">Failed to load report configuration: {filtersError}</p>
+          <Button variant="secondary" onClick={() => setFiltersReloadToken((prev) => prev + 1)}>
+            Retry
+          </Button>
+        </Card>
+      );
+    }
     return <div className="animate-pulse text-sm text-zinc-400">Loading report configuration...</div>;
   }
 
@@ -379,6 +417,7 @@ export function RetrospectiveProductivityReport() {
 
       <Card className="overflow-x-auto p-4">
         <h2 className="mb-3 text-sm font-medium text-zinc-200">Task detail by team member</h2>
+        {reportError ? <p className="mb-2 text-sm text-rose-300">{reportError}</p> : null}
         {loadingReport ? (
           <div className="animate-pulse text-sm text-zinc-400">Loading report rows...</div>
         ) : table.length === 0 ? (
