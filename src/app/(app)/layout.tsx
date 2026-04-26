@@ -81,6 +81,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <nav className="flex items-center gap-4 text-sm text-zinc-300">
               <Link href="/dashboard">Dashboard</Link>
               <Link href="/time">Time Entry</Link>
+              <Link href="/reports">Reports</Link>
               <div className="group relative">
                 <Link href="/timesheet" className="inline-flex items-center gap-1">
                   Timesheet

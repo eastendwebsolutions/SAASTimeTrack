@@ -3,6 +3,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   primaryKey,
@@ -23,6 +24,8 @@ export const ppParticipantRoleEnum = pgEnum("pp_participant_role", ["facilitator
 export const ppStoryStatusEnum = pgEnum("pp_story_status", ["pending", "voting", "revealed", "finalized"]);
 export const ppRoundStateEnum = pgEnum("pp_round_state", ["open", "revealed", "closed"]);
 export const integrationProviderEnum = pgEnum("integration_provider", ["asana", "jira", "monday"]);
+export const reportingSprintStatusEnum = pgEnum("reporting_sprint_status", ["planned", "active", "completed", "archived"]);
+export const mappingScopeTypeEnum = pgEnum("integration_mapping_scope_type", ["company", "workspace", "project"]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -126,6 +129,11 @@ export const timeEntries = pgTable("time_entries", {
   durationMinutes: integer("duration_minutes").notNull(),
   summary: text("summary").notNull(),
   status: entryStatusEnum("status").notNull().default("draft"),
+  integrationType: integrationProviderEnum("integration_type").notNull().default("asana"),
+  externalWorkspaceId: varchar("external_workspace_id", { length: 120 }),
+  externalProjectId: varchar("external_project_id", { length: 120 }),
+  externalTaskId: varchar("external_task_id", { length: 120 }),
+  externalSubtaskId: varchar("external_subtask_id", { length: 120 }),
   lockedAt: timestamp("locked_at", { withTimezone: true }),
   approvedBy: uuid("approved_by").references(() => users.id),
   approvedAt: timestamp("approved_at", { withTimezone: true }),
@@ -133,6 +141,130 @@ export const timeEntries = pgTable("time_entries", {
 }, (table) => ({
   userDateIdx: index("time_entries_company_user_date_idx").on(table.companyId, table.userId, table.entryDate),
   statusIdx: index("time_entries_company_status_date_idx").on(table.companyId, table.status, table.entryDate),
+  reportLookupIdx: index("time_entries_reporting_lookup_idx").on(
+    table.companyId,
+    table.integrationType,
+    table.externalWorkspaceId,
+    table.entryDate,
+    table.userId,
+  ),
+}));
+
+export const reportingWorkspaces = pgTable("reporting_workspaces", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  integrationType: integrationProviderEnum("integration_type").notNull(),
+  externalWorkspaceId: varchar("external_workspace_id", { length: 120 }).notNull(),
+  workspaceName: varchar("workspace_name", { length: 255 }).notNull(),
+  ...timestamps,
+}, (table) => ({
+  uniqueWorkspaceIdx: uniqueIndex("reporting_workspaces_company_integration_external_unique").on(
+    table.companyId,
+    table.integrationType,
+    table.externalWorkspaceId,
+  ),
+  companyWorkspaceIdx: index("reporting_workspaces_company_workspace_idx").on(table.companyId, table.integrationType),
+}));
+
+export const reportingSprints = pgTable("reporting_sprints", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  integrationType: integrationProviderEnum("integration_type").notNull(),
+  externalWorkspaceId: varchar("external_workspace_id", { length: 120 }).notNull(),
+  externalSprintId: varchar("external_sprint_id", { length: 120 }).notNull(),
+  sprintName: varchar("sprint_name", { length: 255 }).notNull(),
+  startDate: timestamp("start_date", { withTimezone: false }).notNull(),
+  endDate: timestamp("end_date", { withTimezone: false }).notNull(),
+  status: reportingSprintStatusEnum("status").notNull().default("planned"),
+  ...timestamps,
+}, (table) => ({
+  uniqueSprintIdx: uniqueIndex("reporting_sprints_company_integration_external_unique").on(
+    table.companyId,
+    table.integrationType,
+    table.externalWorkspaceId,
+    table.externalSprintId,
+  ),
+  periodLookupIdx: index("reporting_sprints_period_lookup_idx").on(
+    table.companyId,
+    table.integrationType,
+    table.externalWorkspaceId,
+    table.startDate,
+    table.endDate,
+  ),
+}));
+
+export const reportingTasks = pgTable("reporting_tasks", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  integrationType: integrationProviderEnum("integration_type").notNull(),
+  externalWorkspaceId: varchar("external_workspace_id", { length: 120 }).notNull(),
+  externalProjectId: varchar("external_project_id", { length: 120 }),
+  externalSprintId: varchar("external_sprint_id", { length: 120 }),
+  externalTaskId: varchar("external_task_id", { length: 120 }).notNull(),
+  externalParentTaskId: varchar("external_parent_task_id", { length: 120 }),
+  taskName: varchar("task_name", { length: 255 }).notNull(),
+  projectName: varchar("project_name", { length: 255 }),
+  assigneeExternalId: varchar("assignee_external_id", { length: 120 }),
+  assigneeUserId: uuid("assignee_user_id").references(() => users.id, { onDelete: "set null" }),
+  estimateHours: numeric("estimate_hours", { precision: 10, scale: 2 }),
+  storyPoints: numeric("story_points", { precision: 10, scale: 2 }),
+  actualPoints: numeric("actual_points", { precision: 10, scale: 2 }),
+  taskStatus: varchar("task_status", { length: 100 }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow().notNull(),
+  ...timestamps,
+}, (table) => ({
+  uniqueTaskIdx: uniqueIndex("reporting_tasks_company_integration_external_unique").on(
+    table.companyId,
+    table.integrationType,
+    table.externalWorkspaceId,
+    table.externalTaskId,
+  ),
+  sprintLookupIdx: index("reporting_tasks_sprint_lookup_idx").on(
+    table.companyId,
+    table.integrationType,
+    table.externalWorkspaceId,
+    table.externalSprintId,
+    table.assigneeUserId,
+  ),
+  statusLookupIdx: index("reporting_tasks_status_lookup_idx").on(table.companyId, table.taskStatus, table.completedAt),
+}));
+
+export const integrationFieldMappings = pgTable("integration_field_mappings", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  integrationType: integrationProviderEnum("integration_type").notNull(),
+  scopeType: mappingScopeTypeEnum("scope_type").notNull().default("company"),
+  scopeExternalId: varchar("scope_external_id", { length: 120 }),
+  mappingKey: varchar("mapping_key", { length: 120 }).notNull(),
+  externalFieldId: varchar("external_field_id", { length: 120 }),
+  externalFieldName: varchar("external_field_name", { length: 255 }),
+  externalFieldType: varchar("external_field_type", { length: 100 }),
+  isActive: boolean("is_active").notNull().default(true),
+  metadataJson: jsonb("metadata_json"),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+}, (table) => ({
+  activeMappingLookupIdx: index("integration_field_mappings_company_provider_key_active_idx").on(
+    table.companyId,
+    table.integrationType,
+    table.mappingKey,
+    table.isActive,
+  ),
+  scopeLookupIdx: index("integration_field_mappings_scope_lookup_idx").on(
+    table.companyId,
+    table.integrationType,
+    table.scopeType,
+    table.scopeExternalId,
+  ),
+  uniqueActiveScopeMappingIdx: uniqueIndex("integration_field_mappings_active_scope_unique").on(
+    table.companyId,
+    table.integrationType,
+    table.scopeType,
+    table.scopeExternalId,
+    table.mappingKey,
+    table.isActive,
+  ),
 }));
 
 export const entryComments = pgTable("entry_comments", {

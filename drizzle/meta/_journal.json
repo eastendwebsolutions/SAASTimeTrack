@@ -64,6 +64,13 @@
       "when": 1777411200000,
       "tag": "0008_monday_safe_rollout_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1777203000000,
+      "tag": "0009_retrospective_reporting_foundation",
+      "breakpoints": true
     }
   ]
 }

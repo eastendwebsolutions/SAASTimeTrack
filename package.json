@@ -9,7 +9,8 @@
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
-    "deploy:vercel": "npx vercel --prod"
+    "deploy:vercel": "npx vercel --prod",
+    "test": "vitest run"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.0.6",
@@ -25,6 +26,7 @@
     "pdf-lib": "^1.17.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "recharts": "^3.8.1",
     "tailwind-merge": "^3.5.0",
     "zod": "^4.3.6",
     "zustand": "^5.0.12"
@@ -38,6 +40,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^4.1.5"
   }
 }
