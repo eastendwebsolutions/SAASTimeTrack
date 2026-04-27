@@ -39,6 +39,7 @@ export async function getOrCreateCurrentUser() {
           id: true,
           clerkUserId: true,
           email: true,
+          displayName: true,
           asanaUserId: true,
           role: true,
           isPokerPlanningAdmin: true,
@@ -82,16 +83,14 @@ export async function getOrCreateCurrentUser() {
 
   const clerkUser = await currentUser();
   const email = clerkUser?.emailAddresses?.[0]?.emailAddress;
+  if (!email) {
+    return null;
+  }
   const displayName = deriveDisplayName({
     firstName: clerkUser?.firstName,
     lastName: clerkUser?.lastName,
     email,
   });
-
-
-  if (!email) {
-    return null;
-  }
 
   const companyName = `${email.split("@")[0]}'s Company`;
   const insertedCompany = await db.insert(companies).values({ name: companyName }).returning();
