@@ -82,6 +82,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <nav className="flex items-center gap-4 text-sm text-zinc-300">
               <Link href="/dashboard">Dashboard</Link>
               <Link href="/time">Time Entry</Link>
+              <Link href="/billing">Billing</Link>
               <Link href="/reports">Reports</Link>
               <div className="group relative">
                 <Link href="/timesheet" className="inline-flex items-center gap-1">
@@ -136,6 +137,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 <Link href="/settings/integrations" className="block rounded px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
                   Integrations
                 </Link>
+                {canSeeAdmin ? (
+                  <>
+                    <Link href="/admin/billing/settings" className="block rounded px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
+                      Billing Settings
+                    </Link>
+                    <Link href="/admin/billing/submissions" className="block rounded px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
+                      Billing Submissions
+                    </Link>
+                  </>
+                ) : null}
               </div>
             </div>
           </div>

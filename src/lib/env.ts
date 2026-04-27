@@ -17,6 +17,9 @@ const envSchema = z.object({
   MONDAY_REDIRECT_URI: z.string().url().optional(),
   MONDAY_FEATURE_ENABLED: z.enum(["0", "1"]).optional(),
   ENCRYPTION_KEY: z.string().min(32),
+  RESEND_API_KEY: z.string().optional(),
+  BILLING_FROM_EMAIL: z.email().optional(),
+  BILLING_MAX_FILE_SIZE_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -44,6 +47,9 @@ export function getEnv(): Env {
     MONDAY_REDIRECT_URI: process.env.MONDAY_REDIRECT_URI,
     MONDAY_FEATURE_ENABLED: process.env.MONDAY_FEATURE_ENABLED,
     ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    BILLING_FROM_EMAIL: process.env.BILLING_FROM_EMAIL,
+    BILLING_MAX_FILE_SIZE_BYTES: process.env.BILLING_MAX_FILE_SIZE_BYTES,
   });
 
   return cachedEnv;

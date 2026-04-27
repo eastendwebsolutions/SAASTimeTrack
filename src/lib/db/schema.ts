@@ -27,6 +27,13 @@ export const integrationProviderEnum = pgEnum("integration_provider", ["asana", 
 export const reportingSprintStatusEnum = pgEnum("reporting_sprint_status", ["planned", "active", "completed", "archived"]);
 export const mappingScopeTypeEnum = pgEnum("integration_mapping_scope_type", ["company", "workspace", "project"]);
 export const teamStatusEventTypeEnum = pgEnum("team_status_event_type", ["DAY_IN", "DAY_OUT", "BREAK_IN", "BREAK_OUT"]);
+export const billingSubmissionStatusEnum = pgEnum("billing_submission_status", [
+  "submitted",
+  "accepted",
+  "needs_resubmission",
+  "failed",
+]);
+export const billingEmailStatusEnum = pgEnum("billing_email_status", ["pending", "sent", "failed"]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -51,10 +58,27 @@ export const companySettings = pgTable("company_settings", {
   ...timestamps,
 });
 
+export const billingSettings = pgTable("billing_settings", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  companyId: uuid("company_id")
+    .notNull()
+    .unique()
+    .references(() => companies.id, { onDelete: "cascade" }),
+  toRecipientsJson: jsonb("to_recipients_json").notNull().default([]),
+  ccRecipientsJson: jsonb("cc_recipients_json").notNull().default([]),
+  defaultBodyFooter: text("default_body_footer"),
+  submissionInstructions: text("submission_instructions"),
+  overdueBannerEnabled: boolean("overdue_banner_enabled").notNull().default(true),
+  expectedSubmissionCutoffTime: varchar("expected_submission_cutoff_time", { length: 20 }),
+  updatedByUserId: uuid("updated_by_user_id"),
+  ...timestamps,
+});
+
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
   clerkUserId: varchar("clerk_user_id", { length: 255 }).notNull().unique(),
   email: varchar("email", { length: 255 }).notNull(),
+  displayName: varchar("display_name", { length: 255 }),
   asanaUserId: varchar("asana_user_id", { length: 100 }),
   role: roleEnum("role").notNull().default("user"),
   activeIntegrationProvider: integrationProviderEnum("active_integration_provider").notNull().default("asana"),
@@ -65,6 +89,97 @@ export const users = pgTable("users", {
 }, (table) => ({
   companyIdx: index("users_company_idx").on(table.companyId),
 }));
+
+export const billingPeriods = pgTable(
+  "billing_periods",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    periodStartDate: timestamp("period_start_date", { withTimezone: false }).notNull(),
+    periodEndDate: timestamp("period_end_date", { withTimezone: false }).notNull(),
+    timezone: varchar("timezone", { length: 100 }).notNull().default("America/New_York"),
+    label: varchar("label", { length: 255 }).notNull(),
+    ...timestamps,
+  },
+  (table) => ({
+    companyPeriodUnique: uniqueIndex("billing_periods_company_start_end_unique").on(
+      table.companyId,
+      table.periodStartDate,
+      table.periodEndDate,
+    ),
+    companyPeriodLookupIdx: index("billing_periods_company_period_lookup_idx").on(table.companyId, table.periodStartDate, table.periodEndDate),
+  }),
+);
+
+export const billingSubmissions = pgTable(
+  "billing_submissions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    billingPeriodId: uuid("billing_period_id")
+      .notNull()
+      .references(() => billingPeriods.id, { onDelete: "cascade" }),
+    subject: varchar("subject", { length: 255 }).notNull(),
+    bodyContent: text("body_content"),
+    status: billingSubmissionStatusEnum("status").notNull().default("submitted"),
+    submissionAttemptNumber: integer("submission_attempt_number").notNull().default(1),
+    submittedAtUtc: timestamp("submitted_at_utc", { withTimezone: true }).notNull(),
+    submittedAtLocalLabel: varchar("submitted_at_local_label", { length: 120 }),
+    emailToJson: jsonb("email_to_json").notNull().default([]),
+    emailCcJson: jsonb("email_cc_json").notNull().default([]),
+    emailStatus: billingEmailStatusEnum("email_status").notNull().default("pending"),
+    emailErrorMessage: text("email_error_message"),
+    adminNote: text("admin_note"),
+    resubmissionRequestedByUserId: uuid("resubmission_requested_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    resubmissionRequestedAtUtc: timestamp("resubmission_requested_at_utc", { withTimezone: true }),
+    resubmissionDueAtUtc: timestamp("resubmission_due_at_utc", { withTimezone: true }),
+    acceptedByUserId: uuid("accepted_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    acceptedAtUtc: timestamp("accepted_at_utc", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => ({
+    companyUserPeriodCreatedIdx: index("billing_submissions_company_user_period_created_idx").on(
+      table.companyId,
+      table.userId,
+      table.billingPeriodId,
+      table.createdAt,
+    ),
+    periodStatusIdx: index("billing_submissions_period_status_idx").on(table.billingPeriodId, table.status, table.createdAt),
+  }),
+);
+
+export const billingSubmissionFiles = pgTable(
+  "billing_submission_files",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    billingSubmissionId: uuid("billing_submission_id")
+      .notNull()
+      .references(() => billingSubmissions.id, { onDelete: "cascade" }),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    originalFileName: varchar("original_file_name", { length: 255 }).notNull(),
+    storedFileName: varchar("stored_file_name", { length: 255 }).notNull(),
+    fileMimeType: varchar("file_mime_type", { length: 120 }).notNull(),
+    fileSizeBytes: integer("file_size_bytes").notNull(),
+    storagePath: text("storage_path").notNull(),
+    uploadedAtUtc: timestamp("uploaded_at_utc", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    submissionIdx: index("billing_submission_files_submission_idx").on(table.billingSubmissionId),
+  }),
+);
 
 export const projects = pgTable("projects", {
   id: uuid("id").defaultRandom().primaryKey(),

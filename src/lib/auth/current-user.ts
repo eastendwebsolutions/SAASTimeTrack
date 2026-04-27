@@ -6,6 +6,20 @@ import { isMissingIntegrationSchemaError } from "@/lib/integrations/schema-compa
 
 const SUPER_ADMIN_EMAILS = new Set(["bryan@eastendwebsolutions.com"]);
 
+function deriveDisplayName({
+  firstName,
+  lastName,
+  email,
+}: {
+  firstName?: string | null;
+  lastName?: string | null;
+  email: string;
+}) {
+  const fullName = [firstName?.trim(), lastName?.trim()].filter(Boolean).join(" ").trim();
+  if (fullName.length > 0) return fullName;
+  return email.split("@")[0];
+}
+
 export async function getOrCreateCurrentUser() {
   const { userId } = await auth();
   if (!userId) {
@@ -40,11 +54,25 @@ export async function getOrCreateCurrentUser() {
   })();
 
   if (existing) {
+    const clerkProfile = await currentUser();
+    const desiredDisplayName = deriveDisplayName({
+      firstName: clerkProfile?.firstName,
+      lastName: clerkProfile?.lastName,
+      email: existing.email,
+    });
     const shouldBeSuperAdmin = SUPER_ADMIN_EMAILS.has(existing.email.toLowerCase());
     if (shouldBeSuperAdmin && existing.role !== "super_admin") {
       const [updated] = await db
         .update(users)
-        .set({ role: "super_admin" })
+        .set({ role: "super_admin", displayName: desiredDisplayName })
+        .where(eq(users.id, existing.id))
+        .returning();
+      return updated;
+    }
+    if (existing.displayName !== desiredDisplayName) {
+      const [updated] = await db
+        .update(users)
+        .set({ displayName: desiredDisplayName })
         .where(eq(users.id, existing.id))
         .returning();
       return updated;
@@ -54,6 +82,12 @@ export async function getOrCreateCurrentUser() {
 
   const clerkUser = await currentUser();
   const email = clerkUser?.emailAddresses?.[0]?.emailAddress;
+  const displayName = deriveDisplayName({
+    firstName: clerkUser?.firstName,
+    lastName: clerkUser?.lastName,
+    email,
+  });
+
 
   if (!email) {
     return null;
@@ -68,6 +102,7 @@ export async function getOrCreateCurrentUser() {
     .values({
       clerkUserId: userId,
       email,
+      displayName,
       role: SUPER_ADMIN_EMAILS.has(email.toLowerCase()) ? "super_admin" : "user",
       companyId: insertedCompany[0].id,
     })
@@ -91,6 +126,7 @@ export async function getOrCreateCurrentUser() {
             id: true,
             clerkUserId: true,
             email: true,
+            displayName: true,
             asanaUserId: true,
             role: true,
             isPokerPlanningAdmin: true,
@@ -111,7 +147,16 @@ export async function getOrCreateCurrentUser() {
     if (shouldBeSuperAdmin && conflicted.role !== "super_admin") {
       const [updated] = await db
         .update(users)
-        .set({ role: "super_admin" })
+        .set({ role: "super_admin", displayName })
+        .where(eq(users.id, conflicted.id))
+        .returning();
+      return updated;
+    }
+
+    if (conflicted.displayName !== displayName) {
+      const [updated] = await db
+        .update(users)
+        .set({ displayName })
         .where(eq(users.id, conflicted.id))
         .returning();
       return updated;
@@ -132,6 +177,7 @@ export async function getOrCreateCurrentUser() {
         id: true,
         clerkUserId: true,
         email: true,
+        displayName: true,
         asanaUserId: true,
         role: true,
         isPokerPlanningAdmin: true,

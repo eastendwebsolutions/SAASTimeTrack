@@ -13,6 +13,7 @@ Asana-first multi-tenant time tracking MVP built with Next.js, Clerk, Drizzle, a
 - Per-entry admin approval/rejection and comments endpoint
 - CSV and basic PDF export routes
 - Company settings read path for locked-entry admin override
+- Billing tab with weekly invoice submission, admin review, and resubmission workflow
 
 ## Local Setup
 
@@ -78,6 +79,9 @@ Copy names from `.env.example`. Minimum:
 | `ASANA_REDIRECT_URI` | `https://<your-domain>/api/asana/callback` (must match Asana app exactly) |
 | `ENCRYPTION_KEY` | Same 32+ char secret as local (or new one—users must reconnect Asana) |
 | `CRON_SECRET` | Random string (16+ chars); Vercel sends `Authorization: Bearer <value>` to cron routes |
+| `RESEND_API_KEY` | Resend API key for billing submission emails |
+| `BILLING_FROM_EMAIL` | Verified sender address used for billing emails |
+| `BILLING_MAX_FILE_SIZE_BYTES` | Per-file upload size limit (default `10485760`) |
 
 Then **Redeploy** the latest deployment.
 
