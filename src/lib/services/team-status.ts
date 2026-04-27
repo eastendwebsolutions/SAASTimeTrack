@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { companies, teamStatusEvents, users } from "@/lib/db/schema";
 import type { Role } from "@/lib/auth/rbac";
+import { getClerkDisplayNames } from "@/lib/services/clerk-admin";
 
 export const TEAM_STATUS_TIMEZONE = "America/New_York";
 export const TEAM_STATUS_SOURCE = "web_dashboard";
@@ -108,8 +109,7 @@ function displayNameFromEmail(email: string) {
     .join(" ");
 }
 
-function initialsFromEmail(email: string) {
-  const name = displayNameFromEmail(email);
+function initialsFromName(name: string) {
   const parts = name.split(" ").filter(Boolean);
   return (parts[0]?.[0] ?? "").concat(parts[1]?.[0] ?? "").toUpperCase() || "U";
 }
@@ -339,6 +339,7 @@ export async function listTeamStatusFeed(params: {
       user: {
         id: users.id,
         email: users.email,
+        clerkUserId: users.clerkUserId,
       },
     })
     .from(teamStatusEvents)
@@ -352,14 +353,16 @@ export async function listTeamStatusFeed(params: {
       ? rows.filter((row) => row.user.id === params.actor.userId || row.event.companyId === params.actor.companyId)
       : rows;
 
+  const clerkNameMap = await getClerkDisplayNames(filteredRows.map((row) => row.user.clerkUserId));
   const userMap = new Map<string, { id: string; email: string; displayName: string; initials: string }>();
   for (const row of filteredRows) {
+    const displayName = clerkNameMap.get(row.user.clerkUserId) ?? displayNameFromEmail(row.user.email);
     if (!userMap.has(row.user.id)) {
       userMap.set(row.user.id, {
         id: row.user.id,
         email: row.user.email,
-        displayName: displayNameFromEmail(row.user.email),
-        initials: initialsFromEmail(row.user.email),
+        displayName,
+        initials: initialsFromName(displayName),
       });
     }
   }
@@ -373,9 +376,12 @@ export async function listTeamStatusFeed(params: {
       eventTimestampUtc: new Date(row.event.eventTimestampUtc).toISOString(),
       eventTimestampLocalLabel: formatEasternTimestamp(new Date(row.event.eventTimestampUtc)),
       eventLocalDate: toNyDateKey(new Date(row.event.eventTimestampUtc)),
-      message: eventMessageFor(row.event.eventType as TeamStatusEventType, displayNameFromEmail(row.user.email)),
-      userDisplayName: displayNameFromEmail(row.user.email),
-      userInitials: initialsFromEmail(row.user.email),
+      message: eventMessageFor(
+        row.event.eventType as TeamStatusEventType,
+        clerkNameMap.get(row.user.clerkUserId) ?? displayNameFromEmail(row.user.email),
+      ),
+      userDisplayName: clerkNameMap.get(row.user.clerkUserId) ?? displayNameFromEmail(row.user.email),
+      userInitials: initialsFromName(clerkNameMap.get(row.user.clerkUserId) ?? displayNameFromEmail(row.user.email)),
     })),
     users: Array.from(userMap.values()).sort((a, b) => a.displayName.localeCompare(b.displayName)),
     companies: params.actor.role === "super_admin" ? await db.select().from(companies).orderBy(asc(companies.name)) : [],

@@ -88,7 +88,7 @@ export function TeamStatusPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
       }
     }
     load();
-    const refresh = window.setInterval(load, 30000);
+    const refresh = window.setInterval(load, 5000);
     return () => {
       mounted = false;
       window.clearInterval(refresh);

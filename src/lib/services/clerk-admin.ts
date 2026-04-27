@@ -2,6 +2,9 @@ import { getEnv } from "@/lib/env";
 
 type ClerkUserPayload = {
   id: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  username?: string | null;
   banned?: boolean;
   last_sign_in_at?: number | string | null;
   last_active_at?: number | string | null;
@@ -76,4 +79,31 @@ export async function getClerkAccessStatus(clerkUserId: string): Promise<ClerkAc
 
 export async function setClerkAccessEnabled(clerkUserId: string, enabled: boolean) {
   await clerkApi(`/users/${clerkUserId}/${enabled ? "unban" : "ban"}`, { method: "POST" });
+}
+
+function fallbackNameFromUsernameOrId(username: string | null | undefined, clerkUserId: string) {
+  if (username && username.trim()) return username.trim();
+  return clerkUserId;
+}
+
+export async function getClerkDisplayNames(clerkUserIds: string[]) {
+  const uniqueIds = Array.from(new Set(clerkUserIds.filter(Boolean)));
+  const results = await Promise.allSettled(
+    uniqueIds.map(async (clerkUserId) => {
+      const payload = await clerkApi<ClerkUserPayload>(`/users/${clerkUserId}`);
+      const fullName = [payload.first_name, payload.last_name].filter(Boolean).join(" ").trim();
+      return {
+        clerkUserId,
+        displayName: fullName || fallbackNameFromUsernameOrId(payload.username, clerkUserId),
+      };
+    }),
+  );
+
+  const nameMap = new Map<string, string>();
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      nameMap.set(result.value.clerkUserId, result.value.displayName);
+    }
+  }
+  return nameMap;
 }
