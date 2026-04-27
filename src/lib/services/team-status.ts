@@ -291,8 +291,7 @@ export async function createTeamStatusEvent(params: {
 
 export async function getScopeCompanyIds(actor: { role: Role; companyId: string }, requestedCompanyId?: string | null) {
   if (actor.role === "super_admin") {
-    if (!requestedCompanyId) return [];
-    return [requestedCompanyId];
+    return [requestedCompanyId || actor.companyId];
   }
   return [actor.companyId];
 }
