@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { IntegrationLabel } from "@/components/integrations/integration-label";
 import { Card } from "@/components/ui/card";
+import { TeamStatusPanel } from "@/components/dashboard/team-status-panel";
 import { getActiveProviderForUser } from "@/lib/integrations/provider";
 import { getDashboardIntegrationTaskWidget } from "@/lib/services/dashboard-integration-tasks";
 import { getDashboardPokerOutlook } from "@/lib/services/dashboard-poker-outlook";
@@ -148,6 +149,8 @@ export default async function DashboardPage() {
           </Link>
         </Card>
       </div>
+
+      <TeamStatusPanel isSuperAdmin={user.role === "super_admin"} />
     </div>
   );
 }

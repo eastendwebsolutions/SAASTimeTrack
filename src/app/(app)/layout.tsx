@@ -5,6 +5,7 @@ import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { canReviewEntries } from "@/lib/auth/rbac";
 import { TimezoneSync } from "@/components/providers/timezone-sync";
 import { AsanaHeaderStatus } from "@/components/integrations/asana-header-status";
+import { TeamStatusHeaderIndicator } from "@/components/team-status/header-indicator";
 import { db } from "@/lib/db";
 import { asanaConnections, jiraConnections, mondayConnections, syncRuns } from "@/lib/db/schema";
 import { getActiveProviderForUser } from "@/lib/integrations/provider";
@@ -125,6 +126,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               lastSyncedAtIso={latestSyncedAt ? latestSyncedAt.toISOString() : null}
               timezone={user?.timezone ?? "UTC"}
             />
+            <TeamStatusHeaderIndicator />
             <div className="group relative">
               <UserButton />
               <div className="invisible absolute right-0 top-full z-20 min-w-44 rounded-md border border-zinc-800 bg-zinc-950/95 p-1 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">

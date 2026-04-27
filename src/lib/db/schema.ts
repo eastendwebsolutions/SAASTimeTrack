@@ -26,6 +26,7 @@ export const ppRoundStateEnum = pgEnum("pp_round_state", ["open", "revealed", "c
 export const integrationProviderEnum = pgEnum("integration_provider", ["asana", "jira", "monday"]);
 export const reportingSprintStatusEnum = pgEnum("reporting_sprint_status", ["planned", "active", "completed", "archived"]);
 export const mappingScopeTypeEnum = pgEnum("integration_mapping_scope_type", ["company", "workspace", "project"]);
+export const teamStatusEventTypeEnum = pgEnum("team_status_event_type", ["DAY_IN", "DAY_OUT", "BREAK_IN", "BREAK_OUT"]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -500,4 +501,27 @@ export const auditChangeLog = pgTable("audit_change_log", {
     table.contextKey,
     table.createdAt,
   ),
+}));
+
+export const teamStatusEvents = pgTable("team_status_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  eventType: teamStatusEventTypeEnum("event_type").notNull(),
+  eventTimestampUtc: timestamp("event_timestamp_utc", { withTimezone: true }).notNull(),
+  eventTimezone: varchar("event_timezone", { length: 100 }).notNull().default("America/New_York"),
+  eventLocalDate: timestamp("event_local_date", { withTimezone: false }).notNull(),
+  eventLocalTimeLabel: varchar("event_local_time_label", { length: 80 }),
+  source: varchar("source", { length: 50 }).notNull().default("web_dashboard"),
+  note: text("note"),
+  createdByUserId: uuid("created_by_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  ...timestamps,
+}, (table) => ({
+  companyIdx: index("team_status_events_company_idx").on(table.companyId),
+  userIdx: index("team_status_events_user_idx").on(table.userId),
+  localDateIdx: index("team_status_events_local_date_idx").on(table.eventLocalDate),
+  eventTypeIdx: index("team_status_events_event_type_idx").on(table.eventType),
+  eventTimestampIdx: index("team_status_events_event_timestamp_utc_idx").on(table.eventTimestampUtc),
+  companyDateIdx: index("team_status_events_company_local_date_idx").on(table.companyId, table.eventLocalDate),
+  userDateIdx: index("team_status_events_user_local_date_idx").on(table.userId, table.eventLocalDate),
 }));
