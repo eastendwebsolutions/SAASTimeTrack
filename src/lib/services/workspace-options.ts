@@ -1,6 +1,6 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, gt, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { reportingWorkspaces } from "@/lib/db/schema";
+import { reportingWorkspaces, users } from "@/lib/db/schema";
 
 export type WorkspaceOption = {
   id: string; // representative company id for existing API compatibility
@@ -83,7 +83,7 @@ export function buildWorkspaceOptions(
 }
 
 export async function listWorkspaceOptionsForSuperAdmin() {
-  const [rows, asanaWorkspaces] = await Promise.all([
+  const [rows, asanaWorkspaces, activeCompanyRows] = await Promise.all([
     db.query.companies.findMany({
       columns: {
         id: true,
@@ -100,8 +100,17 @@ export async function listWorkspaceOptionsForSuperAdmin() {
         workspaceName: true,
       },
     }),
+    db
+      .select({
+        companyId: users.companyId,
+        userCount: sql<number>`count(*)::int`,
+      })
+      .from(users)
+      .groupBy(users.companyId)
+      .having(gt(sql<number>`count(*)::int`, 0)),
   ]);
 
+  const activeCompanyIds = new Set(activeCompanyRows.map((row) => row.companyId));
   const byCompany = new Map<string, { ids: string[]; namesById: Record<string, string> }>();
   for (const row of asanaWorkspaces) {
     const existing = byCompany.get(row.companyId) ?? { ids: [], namesById: {} };
@@ -114,11 +123,13 @@ export async function listWorkspaceOptionsForSuperAdmin() {
     byCompany.set(row.companyId, existing);
   }
 
-  const enrichedRows = rows.map((row) => ({
-    ...row,
-    reportingWorkspaceIds: byCompany.get(row.id)?.ids ?? [],
-    reportingWorkspaceNamesById: byCompany.get(row.id)?.namesById ?? {},
-  }));
+  const enrichedRows = rows
+    .filter((row) => activeCompanyIds.has(row.id))
+    .map((row) => ({
+      ...row,
+      reportingWorkspaceIds: byCompany.get(row.id)?.ids ?? [],
+      reportingWorkspaceNamesById: byCompany.get(row.id)?.namesById ?? {},
+    }));
 
   return buildWorkspaceOptions(enrichedRows);
 }
