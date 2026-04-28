@@ -9,6 +9,8 @@ import {
   users,
 } from "@/lib/db/schema";
 import { storeBillingFiles } from "@/lib/services/storage";
+import { listWorkspaceOptionsForSuperAdmin } from "@/lib/services/workspace-options";
+import { resolveWorkspaceScopedCompanyIdsForSuperAdmin } from "@/lib/services/workspace-options";
 import { buildBillingSubject, formatSubmittedAtEasternLabel, getBillingPeriodLabel, getMostRecentCompletedBillingWeek } from "./period";
 import { sendBillingSubmissionEmail } from "./email";
 
@@ -243,12 +245,13 @@ export async function getUserBillingHistory(userId: string, companyId: string) {
 }
 
 export async function listAdminBillingSubmissions(actor: AppUser, filters?: { companyId?: string; userId?: string; status?: string }) {
-  const where = [
+  const superAdminCompanyIds =
     actor.role === "super_admin"
-      ? filters?.companyId
-        ? eq(billingSubmissions.companyId, filters.companyId)
-        : undefined
-      : eq(billingSubmissions.companyId, actor.companyId),
+      ? await resolveWorkspaceScopedCompanyIdsForSuperAdmin(filters?.companyId ?? actor.companyId)
+      : [actor.companyId];
+
+  const where = [
+    inArray(billingSubmissions.companyId, superAdminCompanyIds),
     filters?.userId ? eq(billingSubmissions.userId, filters.userId) : undefined,
     filters?.status ? eq(billingSubmissions.status, filters.status as "submitted") : undefined,
   ].filter(Boolean);
@@ -356,15 +359,24 @@ export async function getSubmissionFileForDownload({
 
 export async function listCompaniesForBillingAdmin(actor: AppUser) {
   if (actor.role !== "super_admin") {
-    return db.query.companies.findMany({
+    const companyRows = await db.query.companies.findMany({
       where: eq(companies.id, actor.companyId),
       columns: { id: true, name: true },
     });
+    return companyRows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      workspaceId: null as string | null,
+      companyIds: [row.id],
+    }));
   }
-  return db.query.companies.findMany({
-    columns: { id: true, name: true },
-    orderBy: (table) => [asc(table.name)],
-  });
+  const workspaceOptions = await listWorkspaceOptionsForSuperAdmin();
+  return workspaceOptions.map((option) => ({
+    id: option.id,
+    name: option.label,
+    workspaceId: option.workspaceId,
+    companyIds: option.companyIds,
+  }));
 }
 
 export async function listCompanyUsers(companyId: string) {

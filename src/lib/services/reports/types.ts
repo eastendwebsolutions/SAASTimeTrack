@@ -17,6 +17,7 @@ export type RetrospectiveFilters = {
 
 export type ReportScope = {
   companyId: string;
+  companyIds: string[];
   lockedUserId?: string;
   role: "user" | "company_admin" | "super_admin";
 };

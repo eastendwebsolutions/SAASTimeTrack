@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-type CompanyOption = { id: string; name: string };
+type CompanyOption = { id: string; name: string; workspaceId: string | null; companyIds: string[] };
 
 type SettingsResponse = {
   settings: null | {

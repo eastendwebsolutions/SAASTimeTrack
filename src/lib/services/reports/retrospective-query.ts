@@ -5,6 +5,8 @@ import { isMissingIntegrationSchemaError } from "@/lib/integrations/schema-compa
 import { buildDateRangeComparisonPeriods, coercePeriodKeyFromDate } from "@/lib/services/reports/period-comparison";
 import { resolveReportScope, resolveScopedTeamMembers } from "@/lib/services/reports/scope";
 import type { RetrospectiveFilters } from "@/lib/services/reports/types";
+import { buildWorkspaceOptions } from "@/lib/services/workspace-options";
+import { resolveWorkspaceScopedCompanyIdsForSuperAdmin } from "@/lib/services/workspace-options";
 
 function numberOrNull(value: unknown) {
   if (value === null || value === undefined) return null;
@@ -12,11 +14,11 @@ function numberOrNull(value: unknown) {
   return Number.isFinite(num) ? num : null;
 }
 
-async function resolvePeriodFromFilters(companyId: string, filters: RetrospectiveFilters) {
+async function resolvePeriodFromFilters(companyIds: string[], filters: RetrospectiveFilters) {
   if (filters.periodMode === "sprint") {
     const sprint = await db.query.reportingSprints.findFirst({
       where: and(
-        eq(reportingSprints.companyId, companyId),
+        inArray(reportingSprints.companyId, companyIds),
         eq(reportingSprints.integrationType, filters.integrationType),
         eq(reportingSprints.externalWorkspaceId, filters.workspaceId),
         eq(reportingSprints.externalSprintId, filters.sprintId ?? ""),
@@ -31,8 +33,8 @@ async function resolvePeriodFromFilters(companyId: string, filters: Retrospectiv
 }
 
 async function getScopedDataset(currentUser: { id: string; companyId: string; role: "user" | "company_admin" | "super_admin" }, filters: RetrospectiveFilters) {
-  const scope = resolveReportScope(currentUser, filters);
-  const period = await resolvePeriodFromFilters(scope.companyId, filters);
+  const scope = await resolveReportScope(currentUser, filters);
+  const period = await resolvePeriodFromFilters(scope.companyIds, filters);
   const scopedUserIds = await resolveScopedTeamMembers(scope, filters.teamMemberIds);
 
   if (scopedUserIds.length === 0) {
@@ -40,7 +42,7 @@ async function getScopedDataset(currentUser: { id: string; companyId: string; ro
   }
 
   const whereConditions = [
-    eq(timeEntries.companyId, scope.companyId),
+    inArray(timeEntries.companyId, scope.companyIds),
     eq(timeEntries.integrationType, filters.integrationType),
     eq(timeEntries.externalWorkspaceId, filters.workspaceId),
     gte(timeEntries.entryDate, period.start),
@@ -113,26 +115,29 @@ export async function getRetrospectiveFiltersData(
   selectedCompanyId?: string,
 ) {
   const canSelectCompany = currentUser.role === "super_admin";
-  const companyId = canSelectCompany ? (selectedCompanyId ?? currentUser.companyId) : currentUser.companyId;
+  const companyIds = canSelectCompany
+    ? await resolveWorkspaceScopedCompanyIdsForSuperAdmin(selectedCompanyId ?? currentUser.companyId)
+    : [currentUser.companyId];
+  const companyId = companyIds[0] ?? currentUser.companyId;
 
-  const [companies, allUsers] = await Promise.all([
+  const [companyRows, allUsers] = await Promise.all([
     canSelectCompany
       ? db.query.companies.findMany({
-          columns: { id: true, name: true },
+          columns: { id: true, name: true, asanaWorkspaceId: true },
           orderBy: (table, { asc: ascFn }) => [ascFn(table.name)],
         })
       : db.query.companies.findMany({
           where: (table, { eq: eqFn }) => eqFn(table.id, companyId),
-          columns: { id: true, name: true },
+          columns: { id: true, name: true, asanaWorkspaceId: true },
         }),
     db.query.users.findMany({
-      where: eq(users.companyId, companyId),
+      where: inArray(users.companyId, companyIds),
       columns: { id: true, email: true },
       orderBy: (table, { asc: ascFn }) => [ascFn(table.email)],
     }),
   ]);
   const workspaces = await db.query.reportingWorkspaces.findMany({
-    where: currentUser.role === "super_admin" ? undefined : eq(reportingWorkspaces.companyId, companyId),
+    where: inArray(reportingWorkspaces.companyId, companyIds),
     columns: {
       id: true,
       companyId: true,
@@ -145,6 +150,16 @@ export async function getRetrospectiveFiltersData(
     if (isMissingIntegrationSchemaError(error)) return [];
     throw error;
   });
+
+  const companies = canSelectCompany
+    ? buildWorkspaceOptions(
+        companyRows.map((row) => ({
+          id: row.id,
+          name: row.name,
+          asanaWorkspaceId: row.asanaWorkspaceId,
+        })),
+      ).map((option) => ({ id: option.id, name: option.label }))
+    : companyRows.map((row) => ({ id: row.id, name: row.name }));
 
   return {
     companies,
@@ -203,14 +218,14 @@ export async function getRetrospectiveSummary(currentUser: { id: string; company
 }
 
 export async function getRetrospectiveTrends(currentUser: { id: string; companyId: string; role: "user" | "company_admin" | "super_admin" }, filters: RetrospectiveFilters) {
-  const scope = resolveReportScope(currentUser, filters);
+  const scope = await resolveReportScope(currentUser, filters);
   const scopedUserIds = await resolveScopedTeamMembers(scope, filters.teamMemberIds);
   if (!scopedUserIds.length) return [];
 
   if (filters.periodMode === "sprint") {
     const sprints = await db.query.reportingSprints.findMany({
       where: and(
-        eq(reportingSprints.companyId, scope.companyId),
+        inArray(reportingSprints.companyId, scope.companyIds),
         eq(reportingSprints.integrationType, filters.integrationType),
         eq(reportingSprints.externalWorkspaceId, filters.workspaceId),
       ),
@@ -243,7 +258,7 @@ export async function getRetrospectiveTrends(currentUser: { id: string; companyI
           )
           .where(
             and(
-              eq(timeEntries.companyId, scope.companyId),
+              inArray(timeEntries.companyId, scope.companyIds),
               eq(timeEntries.integrationType, filters.integrationType),
               eq(timeEntries.externalWorkspaceId, filters.workspaceId),
               gte(timeEntries.entryDate, sprint.startDate),
@@ -267,7 +282,7 @@ export async function getRetrospectiveTrends(currentUser: { id: string; companyI
     return trendRows;
   }
 
-  const period = await resolvePeriodFromFilters(scope.companyId, filters);
+  const period = await resolvePeriodFromFilters(scope.companyIds, filters);
   const periods = buildDateRangeComparisonPeriods(period.start, period.end);
   const earliestPeriod = periods[0];
   const latestPeriod = periods[periods.length - 1];
@@ -292,7 +307,7 @@ export async function getRetrospectiveTrends(currentUser: { id: string; companyI
     )
     .where(
       and(
-        eq(timeEntries.companyId, scope.companyId),
+        inArray(timeEntries.companyId, scope.companyIds),
         eq(timeEntries.integrationType, filters.integrationType),
         eq(timeEntries.externalWorkspaceId, filters.workspaceId),
         gte(timeEntries.entryDate, earliestPeriod.start),
@@ -443,7 +458,7 @@ export async function getTaskTimeEntryDrilldown(
     .leftJoin(timesheets, eq(timesheets.id, timeEntries.timesheetId))
     .where(
       and(
-        eq(timeEntries.companyId, scope.companyId),
+        inArray(timeEntries.companyId, scope.companyIds),
         eq(timeEntries.integrationType, filters.integrationType),
         eq(timeEntries.externalWorkspaceId, filters.workspaceId),
         eq(timeEntries.externalTaskId, taskId),
@@ -469,7 +484,7 @@ export async function getTaskTimeEntryDrilldown(
   }));
 }
 
-export async function listProjectsForWorkspace(companyId: string, integrationType: string, workspaceId: string) {
+export async function listProjectsForWorkspace(companyIds: string[], integrationType: string, workspaceId: string) {
   const projectRows = await db
     .selectDistinct({
       id: reportingTasks.externalProjectId,
@@ -477,7 +492,7 @@ export async function listProjectsForWorkspace(companyId: string, integrationTyp
     })
     .from(reportingTasks)
     .where(and(
-      eq(reportingTasks.companyId, companyId),
+      inArray(reportingTasks.companyId, companyIds),
       eq(reportingTasks.integrationType, integrationType as "asana" | "jira" | "monday"),
       eq(reportingTasks.externalWorkspaceId, workspaceId),
     ))
@@ -490,12 +505,12 @@ export async function listProjectsForWorkspace(companyId: string, integrationTyp
   return projectRows.filter((row) => row.id).map((row) => ({ id: row.id as string, name: row.name ?? "Unnamed project" }));
 }
 
-export async function listStatusesForWorkspace(companyId: string, integrationType: string, workspaceId: string) {
+export async function listStatusesForWorkspace(companyIds: string[], integrationType: string, workspaceId: string) {
   const statusRows = await db
     .selectDistinct({ status: reportingTasks.taskStatus })
     .from(reportingTasks)
     .where(and(
-      eq(reportingTasks.companyId, companyId),
+      inArray(reportingTasks.companyId, companyIds),
       eq(reportingTasks.integrationType, integrationType as "asana" | "jira" | "monday"),
       eq(reportingTasks.externalWorkspaceId, workspaceId),
     ))

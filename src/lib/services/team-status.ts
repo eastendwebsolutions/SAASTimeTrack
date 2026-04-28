@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { companies, teamStatusEvents, users } from "@/lib/db/schema";
 import type { Role } from "@/lib/auth/rbac";
 import { getClerkDisplayNames } from "@/lib/services/clerk-admin";
+import { buildWorkspaceOptions, resolveWorkspaceScopedCompanyIdsForSuperAdmin } from "@/lib/services/workspace-options";
 
 export const TEAM_STATUS_TIMEZONE = "America/New_York";
 export const TEAM_STATUS_SOURCE = "web_dashboard";
@@ -291,7 +292,7 @@ export async function createTeamStatusEvent(params: {
 
 export async function getScopeCompanyIds(actor: { role: Role; companyId: string }, requestedCompanyId?: string | null) {
   if (actor.role === "super_admin") {
-    return [requestedCompanyId || actor.companyId];
+    return resolveWorkspaceScopedCompanyIdsForSuperAdmin(requestedCompanyId ?? actor.companyId);
   }
   return [actor.companyId];
 }
@@ -366,6 +367,17 @@ export async function listTeamStatusFeed(params: {
     }
   }
 
+  const companyRows = params.actor.role === "super_admin" ? await db.select().from(companies).orderBy(asc(companies.name)) : [];
+  const workspaceOptions = params.actor.role === "super_admin"
+    ? buildWorkspaceOptions(
+        companyRows.map((company) => ({
+          id: company.id,
+          name: company.name,
+          asanaWorkspaceId: company.asanaWorkspaceId,
+        })),
+      ).map((option) => ({ id: option.id, name: option.label }))
+    : [];
+
   return {
     events: filteredRows.map((row) => ({
       id: row.event.id,
@@ -383,7 +395,7 @@ export async function listTeamStatusFeed(params: {
       userInitials: initialsFromName(clerkNameMap.get(row.user.clerkUserId) ?? displayNameFromEmail(row.user.email)),
     })),
     users: Array.from(userMap.values()).sort((a, b) => a.displayName.localeCompare(b.displayName)),
-    companies: params.actor.role === "super_admin" ? await db.select().from(companies).orderBy(asc(companies.name)) : [],
+    companies: workspaceOptions,
     requiresCompanyFilter: false,
   };
 }

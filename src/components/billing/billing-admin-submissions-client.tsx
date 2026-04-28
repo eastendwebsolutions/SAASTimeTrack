@@ -17,9 +17,11 @@ type SubmissionRow = {
   adminNote: string | null;
   files: Array<{ id: string; originalFileName: string }>;
 };
+type CompanyOption = { id: string; name: string };
 
 export function BillingAdminSubmissionsClient({ isSuperAdmin, companyId }: { isSuperAdmin: boolean; companyId: string }) {
   const [rows, setRows] = useState<SubmissionRow[]>([]);
+  const [companyOptions, setCompanyOptions] = useState<CompanyOption[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [companyFilter, setCompanyFilter] = useState(companyId);
   const [selected, setSelected] = useState<SubmissionRow | null>(null);
@@ -43,6 +45,17 @@ export function BillingAdminSubmissionsClient({ isSuperAdmin, companyId }: { isS
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    async function loadCompanyOptions() {
+      const res = await fetch("/api/admin/billing/settings");
+      const json = await res.json();
+      if (!res.ok) return;
+      setCompanyOptions((json.availableCompanies as CompanyOption[] | undefined) ?? []);
+    }
+    void loadCompanyOptions();
+  }, [isSuperAdmin]);
 
   async function applyStatus(status: "accepted" | "needs_resubmission") {
     if (!selected) return;
@@ -84,8 +97,14 @@ export function BillingAdminSubmissionsClient({ isSuperAdmin, companyId }: { isS
       <Card className="flex flex-wrap items-end gap-3 p-4">
         {isSuperAdmin ? (
           <label className="text-sm text-zinc-300">
-            Company ID
-            <input className="ml-2 rounded border border-zinc-700 bg-zinc-950 p-2 text-sm" value={companyFilter} onChange={(event) => setCompanyFilter(event.target.value)} />
+            Workspace
+            <select className="ml-2 rounded border border-zinc-700 bg-zinc-950 p-2 text-sm" value={companyFilter} onChange={(event) => setCompanyFilter(event.target.value)}>
+              {companyOptions.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.name}
+                </option>
+              ))}
+            </select>
           </label>
         ) : null}
         <label className="text-sm text-zinc-300">
