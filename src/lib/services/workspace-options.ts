@@ -11,11 +11,20 @@ export type WorkspaceOption = {
 export function buildWorkspaceOptions(
   rows: Array<{ id: string; name: string; asanaWorkspaceId: string | null }>,
 ): WorkspaceOption[] {
+  const nullWorkspaceNameCounts = new Map<string, number>();
+  for (const row of rows) {
+    if (row.asanaWorkspaceId?.trim()) continue;
+    const nameKey = row.name.trim().toLowerCase();
+    nullWorkspaceNameCounts.set(nameKey, (nullWorkspaceNameCounts.get(nameKey) ?? 0) + 1);
+  }
+
   const grouped = new Map<string, { workspaceId: string | null; companies: Array<{ id: string; name: string }> }>();
 
   for (const row of rows) {
     const workspaceId = row.asanaWorkspaceId?.trim() || null;
-    const key = workspaceId ?? `company:${row.id}`;
+    const nullWorkspaceNameKey = row.name.trim().toLowerCase();
+    const shouldGroupByName = !workspaceId && (nullWorkspaceNameCounts.get(nullWorkspaceNameKey) ?? 0) > 1;
+    const key = workspaceId ?? (shouldGroupByName ? `name:${nullWorkspaceNameKey}` : `company:${row.id}`);
     const existing = grouped.get(key) ?? { workspaceId, companies: [] };
     existing.companies.push({ id: row.id, name: row.name });
     grouped.set(key, existing);
