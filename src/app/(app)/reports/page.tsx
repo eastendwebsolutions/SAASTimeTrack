@@ -1,8 +1,13 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
+import { canReviewEntries } from "@/lib/auth/rbac";
 
-export default function ReportsLandingPage() {
+export default async function ReportsLandingPage() {
+  const user = await getOrCreateCurrentUser();
+  const showEffectiveness = user && canReviewEntries(user.role);
+
   return (
     <section className="space-y-6">
       <div>
@@ -22,6 +27,21 @@ export default function ReportsLandingPage() {
             </Link>
           </div>
         </Card>
+
+        {showEffectiveness ? (
+          <Card className="border-indigo-500/20 bg-gradient-to-br from-zinc-900/90 to-zinc-950 p-5">
+            <h2 className="text-lg font-medium text-zinc-100">AI Developer Effectiveness</h2>
+            <p className="mt-2 text-sm text-zinc-400">
+              Engineering intelligence: AI adoption, delivery scores, sprint signals, and timesheet discipline—admin
+              visibility only.
+            </p>
+            <div className="mt-4">
+              <Link href="/reports/developer-effectiveness">
+                <Button>Open report</Button>
+              </Link>
+            </div>
+          </Card>
+        ) : null}
       </div>
     </section>
   );

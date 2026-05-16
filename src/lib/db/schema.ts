@@ -34,6 +34,8 @@ export const billingSubmissionStatusEnum = pgEnum("billing_submission_status", [
   "failed",
 ]);
 export const billingEmailStatusEnum = pgEnum("billing_email_status", ["pending", "sent", "failed"]);
+export const aiInsightScopeEnum = pgEnum("ai_insight_scope", ["user", "team", "company"]);
+export const aiInsightRunStatusEnum = pgEnum("ai_insight_run_status", ["pending", "running", "completed", "failed"]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -79,6 +81,8 @@ export const users = pgTable("users", {
   clerkUserId: varchar("clerk_user_id", { length: 255 }).notNull().unique(),
   email: varchar("email", { length: 255 }).notNull(),
   displayName: varchar("display_name", { length: 255 }),
+  /** Optional discipline label for analytics filters (separate from Clerk/app role). */
+  reportingJobRole: varchar("reporting_job_role", { length: 120 }),
   asanaUserId: varchar("asana_user_id", { length: 100 }),
   role: roleEnum("role").notNull().default("user"),
   activeIntegrationProvider: integrationProviderEnum("active_integration_provider").notNull().default("asana"),
@@ -640,3 +644,312 @@ export const teamStatusEvents = pgTable("team_status_events", {
   companyDateIdx: index("team_status_events_company_local_date_idx").on(table.companyId, table.eventLocalDate),
   userDateIdx: index("team_status_events_user_local_date_idx").on(table.userId, table.eventLocalDate),
 }));
+
+/** Per-company Cursor Team / Enterprise analytics API credentials. */
+export const cursorTeamConnections = pgTable(
+  "cursor_team_connections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    companyId: uuid("company_id")
+      .notNull()
+      .unique()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    apiKeyEncrypted: text("api_key_encrypted").notNull(),
+    cursorTeamId: varchar("cursor_team_id", { length: 160 }),
+    lastSyncStartedAt: timestamp("last_sync_started_at", { withTimezone: true }),
+    lastSyncSuccessAt: timestamp("last_sync_success_at", { withTimezone: true }),
+    lastSyncError: text("last_sync_error"),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (table) => ({
+    companyIdx: index("cursor_team_connections_company_idx").on(table.companyId),
+  }),
+);
+
+export const cursorUserIdentities = pgTable(
+  "cursor_user_identities",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+    cursorExternalUserId: varchar("cursor_external_user_id", { length: 160 }).notNull(),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    sourceEmail: varchar("source_email", { length: 255 }),
+    ...timestamps,
+  },
+  (table) => ({
+    companyCursorUnique: uniqueIndex("cursor_user_identities_company_cursor_unique").on(
+      table.companyId,
+      table.cursorExternalUserId,
+    ),
+    companyUserIdx: index("cursor_user_identities_company_user_idx").on(table.companyId, table.userId),
+  }),
+);
+
+export const cursorUsageDaily = pgTable(
+  "cursor_usage_daily",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    usageDate: timestamp("usage_date", { withTimezone: false }).notNull(),
+    totalRequests: integer("total_requests").notNull().default(0),
+    acceptedCompletions: integer("accepted_completions").notNull().default(0),
+    aiLinesAdded: integer("ai_lines_added").notNull().default(0),
+    aiLinesDeleted: integer("ai_lines_deleted").notNull().default(0),
+    manualLinesAdded: integer("manual_lines_added").notNull().default(0),
+    manualLinesDeleted: integer("manual_lines_deleted").notNull().default(0),
+    sessionCount: integer("session_count").notNull().default(0),
+    modelUsageJson: jsonb("model_usage_json").notNull().default({}),
+    ingestionSource: varchar("ingestion_source", { length: 20 }).notNull().default("api"),
+    computedAt: timestamp("computed_at", { withTimezone: true }).defaultNow().notNull(),
+    ...timestamps,
+  },
+  (table) => ({
+    companyUserDateSourceUnique: uniqueIndex("cursor_usage_daily_company_user_date_source_unique").on(
+      table.companyId,
+      table.userId,
+      table.usageDate,
+      table.ingestionSource,
+    ),
+    companyDateIdx: index("cursor_usage_daily_company_date_idx").on(table.companyId, table.usageDate),
+  }),
+);
+
+/** Daily snapshot of PM tasks for reopened / aging metrics (append-only per day). */
+export const taskDeliverySnapshots = pgTable(
+  "task_delivery_snapshots",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+    integrationType: integrationProviderEnum("integration_type").notNull(),
+    externalWorkspaceId: varchar("external_workspace_id", { length: 120 }).notNull(),
+    externalTaskId: varchar("external_task_id", { length: 120 }).notNull(),
+    snapshotDate: timestamp("snapshot_date", { withTimezone: false }).notNull(),
+    taskStatus: varchar("task_status", { length: 100 }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    assigneeUserId: uuid("assignee_user_id").references(() => users.id, { onDelete: "set null" }),
+    storyPoints: numeric("story_points", { precision: 10, scale: 2 }),
+    capturedAt: timestamp("captured_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueDayTask: uniqueIndex("task_delivery_snapshots_company_integration_task_day_unique").on(
+      table.companyId,
+      table.integrationType,
+      table.externalWorkspaceId,
+      table.externalTaskId,
+      table.snapshotDate,
+    ),
+    companyDayIdx: index("task_delivery_snapshots_company_day_idx").on(
+      table.companyId,
+      table.integrationType,
+      table.snapshotDate,
+    ),
+  }),
+);
+
+export const taskDeliveryMetricsDaily = pgTable(
+  "task_delivery_metrics_daily",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+    integrationType: integrationProviderEnum("integration_type").notNull(),
+    externalWorkspaceId: varchar("external_workspace_id", { length: 120 }).notNull(),
+    assigneeUserId: uuid("assignee_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    metricDate: timestamp("metric_date", { withTimezone: false }).notNull(),
+    tasksCompleted: integer("tasks_completed").notNull().default(0),
+    tasksReopened: integer("tasks_reopened").notNull().default(0),
+    storyPointsCompleted: numeric("story_points_completed", { precision: 12, scale: 2 }).notNull().default("0"),
+    tasksActiveEndOfDay: integer("tasks_active_end_of_day").notNull().default(0),
+    computedAt: timestamp("computed_at", { withTimezone: true }).defaultNow().notNull(),
+    ...timestamps,
+  },
+  (table) => ({
+    uniqueGrain: uniqueIndex("task_delivery_metrics_daily_unique_grain").on(
+      table.companyId,
+      table.integrationType,
+      table.externalWorkspaceId,
+      table.assigneeUserId,
+      table.metricDate,
+    ),
+    companyDateIdx: index("task_delivery_metrics_daily_company_date_idx").on(
+      table.companyId,
+      table.integrationType,
+      table.metricDate,
+    ),
+  }),
+);
+
+export const timesheetDeliveryMetricsDaily = pgTable(
+  "timesheet_delivery_metrics_daily",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    metricDate: timestamp("metric_date", { withTimezone: false }).notNull(),
+    loggedDevMinutes: integer("logged_dev_minutes").notNull().default(0),
+    entryCount: integer("entry_count").notNull().default(0),
+    approvedEntryCount: integer("approved_entry_count").notNull().default(0),
+    breakMinutesEstimate: integer("break_minutes_estimate").notNull().default(0),
+    timesheetSubmittedForWeek: boolean("timesheet_submitted_for_week").notNull().default(false),
+    computedAt: timestamp("computed_at", { withTimezone: true }).defaultNow().notNull(),
+    ...timestamps,
+  },
+  (table) => ({
+    uniqueGrain: uniqueIndex("timesheet_delivery_metrics_daily_unique_grain").on(
+      table.companyId,
+      table.userId,
+      table.metricDate,
+    ),
+    companyDateIdx: index("timesheet_delivery_metrics_daily_company_date_idx").on(table.companyId, table.metricDate),
+  }),
+);
+
+export const scoreWeightProfiles = pgTable(
+  "score_weight_profiles",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    /** When null, row is the global template (seeded). */
+    companyId: uuid("company_id").references(() => companies.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 120 }).notNull().default("Default"),
+    isDefault: boolean("is_default").notNull().default(false),
+    weightsJson: jsonb("weights_json").notNull(),
+    schemaVersion: integer("schema_version").notNull().default(1),
+    ...timestamps,
+  },
+  (table) => ({
+    companyDefaultIdx: index("score_weight_profiles_company_default_idx").on(table.companyId, table.isDefault),
+  }),
+);
+
+export const developerEffectivenessDaily = pgTable(
+  "developer_effectiveness_daily",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    integrationType: integrationProviderEnum("integration_type").notNull(),
+    externalWorkspaceId: varchar("external_workspace_id", { length: 120 }).notNull(),
+    metricDate: timestamp("metric_date", { withTimezone: false }).notNull(),
+    deliveryEffectivenessScore: numeric("delivery_effectiveness_score", { precision: 5, scale: 2 }),
+    aiAdoptionScore: numeric("ai_adoption_score", { precision: 5, scale: 2 }),
+    effectivenessBand: varchar("effectiveness_band", { length: 40 }),
+    componentScoresJson: jsonb("component_scores_json"),
+    weightProfileId: uuid("weight_profile_id").references(() => scoreWeightProfiles.id, { onDelete: "set null" }),
+    ingestionBatchId: uuid("ingestion_batch_id"),
+    computedAt: timestamp("computed_at", { withTimezone: true }).defaultNow().notNull(),
+    ...timestamps,
+  },
+  (table) => ({
+    uniqueGrain: uniqueIndex("developer_effectiveness_daily_unique_grain").on(
+      table.companyId,
+      table.userId,
+      table.integrationType,
+      table.externalWorkspaceId,
+      table.metricDate,
+    ),
+    companyDateIdx: index("developer_effectiveness_daily_company_date_idx").on(
+      table.companyId,
+      table.integrationType,
+      table.metricDate,
+    ),
+  }),
+);
+
+export const developerEffectivenessSprint = pgTable(
+  "developer_effectiveness_sprint",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    integrationType: integrationProviderEnum("integration_type").notNull(),
+    externalWorkspaceId: varchar("external_workspace_id", { length: 120 }).notNull(),
+    externalSprintId: varchar("external_sprint_id", { length: 120 }).notNull(),
+    periodStart: timestamp("period_start", { withTimezone: false }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: false }).notNull(),
+    deliveryEffectivenessScore: numeric("delivery_effectiveness_score", { precision: 5, scale: 2 }),
+    aiAdoptionScore: numeric("ai_adoption_score", { precision: 5, scale: 2 }),
+    effectivenessBand: varchar("effectiveness_band", { length: 40 }),
+    componentScoresJson: jsonb("component_scores_json"),
+    weightProfileId: uuid("weight_profile_id").references(() => scoreWeightProfiles.id, { onDelete: "set null" }),
+    ingestionBatchId: uuid("ingestion_batch_id"),
+    computedAt: timestamp("computed_at", { withTimezone: true }).defaultNow().notNull(),
+    ...timestamps,
+  },
+  (table) => ({
+    uniqueGrain: uniqueIndex("developer_effectiveness_sprint_unique_grain").on(
+      table.companyId,
+      table.userId,
+      table.integrationType,
+      table.externalWorkspaceId,
+      table.externalSprintId,
+    ),
+  }),
+);
+
+/** Append-only scored periods for historical report stability. */
+export const developerScores = pgTable(
+  "developer_scores",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    integrationType: integrationProviderEnum("integration_type").notNull(),
+    externalWorkspaceId: varchar("external_workspace_id", { length: 120 }).notNull(),
+    periodStart: timestamp("period_start", { withTimezone: false }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: false }).notNull(),
+    weightProfileId: uuid("weight_profile_id").references(() => scoreWeightProfiles.id, { onDelete: "set null" }),
+    deliveryEffectivenessScore: numeric("delivery_effectiveness_score", { precision: 5, scale: 2 }).notNull(),
+    aiAdoptionScore: numeric("ai_adoption_score", { precision: 5, scale: 2 }).notNull(),
+    effectivenessBand: varchar("effectiveness_band", { length: 40 }).notNull(),
+    componentScoresJson: jsonb("component_scores_json").notNull(),
+    ingestionBatchId: uuid("ingestion_batch_id").notNull(),
+    computedAt: timestamp("computed_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    companyUserPeriodIdx: index("developer_scores_company_user_period_idx").on(
+      table.companyId,
+      table.userId,
+      table.periodEnd,
+    ),
+  }),
+);
+
+export const aiInsightRuns = pgTable(
+  "ai_insight_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+    scopeType: aiInsightScopeEnum("scope_type").notNull(),
+    subjectUserId: uuid("subject_user_id").references(() => users.id, { onDelete: "set null" }),
+    periodStart: timestamp("period_start", { withTimezone: false }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: false }).notNull(),
+    model: varchar("model", { length: 80 }),
+    promptVersion: varchar("prompt_version", { length: 40 }),
+    status: aiInsightRunStatusEnum("status").notNull().default("pending"),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (table) => ({
+    companyCreatedIdx: index("ai_insight_runs_company_created_idx").on(table.companyId, table.createdAt),
+  }),
+);
+
+export const aiInsightOutputs = pgTable(
+  "ai_insight_outputs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    runId: uuid("run_id").notNull().references(() => aiInsightRuns.id, { onDelete: "cascade" }),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+    summaryText: text("summary_text"),
+    panelsJson: jsonb("panels_json"),
+    provenanceJson: jsonb("provenance_json"),
+    timeRangeLabel: varchar("time_range_label", { length: 160 }),
+    groundingHash: varchar("grounding_hash", { length: 128 }),
+    confidenceNote: varchar("confidence_note", { length: 255 }),
+    ...timestamps,
+  },
+  (table) => ({
+    runIdx: index("ai_insight_outputs_run_idx").on(table.runId),
+  }),
+);

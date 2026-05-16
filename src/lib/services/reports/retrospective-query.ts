@@ -14,7 +14,7 @@ function numberOrNull(value: unknown) {
   return Number.isFinite(num) ? num : null;
 }
 
-async function resolvePeriodFromFilters(companyIds: string[], filters: RetrospectiveFilters) {
+export async function resolvePeriodFromFilters(companyIds: string[], filters: RetrospectiveFilters) {
   if (filters.periodMode === "sprint") {
     const sprint = await db.query.reportingSprints.findFirst({
       where: and(
@@ -32,7 +32,10 @@ async function resolvePeriodFromFilters(companyIds: string[], filters: Retrospec
   return { start: filters.startDate, end: filters.endDate, sprintName: null };
 }
 
-async function getScopedDataset(currentUser: { id: string; companyId: string; role: "user" | "company_admin" | "super_admin" }, filters: RetrospectiveFilters) {
+export async function getScopedDataset(
+  currentUser: { id: string; companyId: string; role: "user" | "company_admin" | "super_admin" },
+  filters: RetrospectiveFilters,
+) {
   const scope = await resolveReportScope(currentUser, filters);
   const period = await resolvePeriodFromFilters(scope.companyIds, filters);
   const scopedUserIds = await resolveScopedTeamMembers(scope, filters.teamMemberIds);
@@ -60,6 +63,8 @@ async function getScopedDataset(currentUser: { id: string; companyId: string; ro
     .select({
       userId: users.id,
       userEmail: users.email,
+      userDisplayName: users.displayName,
+      reportingJobRole: users.reportingJobRole,
       entryId: timeEntries.id,
       entryDate: timeEntries.entryDate,
       timeIn: timeEntries.timeIn,

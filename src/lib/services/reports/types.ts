@@ -22,4 +22,10 @@ export type ReportScope = {
   role: "user" | "company_admin" | "super_admin";
 };
 
-export type TrendMetric = "hours" | "points";
+export type DeveloperEffectivenessFilters = RetrospectiveFilters & {
+  reportingJobRole?: string;
+  adoptionScoreMin?: number;
+  deliveryScoreMin?: number;
+  tableSort?: string;
+  tableSortDir?: "asc" | "desc";
+};

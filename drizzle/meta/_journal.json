@@ -92,6 +92,13 @@
       "when": 1777305540098,
       "tag": "0012_new_jean_grey",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1778795835773,
+      "tag": "0013_developer_effectiveness",
+      "breakpoints": true
     }
   ]
 }

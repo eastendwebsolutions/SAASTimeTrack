@@ -145,6 +145,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                     <Link href="/admin/billing/submissions" className="block rounded px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
                       Billing Submissions
                     </Link>
+                    <Link
+                      href="/reports/developer-effectiveness"
+                      className="block rounded px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+                    >
+                      AI effectiveness
+                    </Link>
                   </>
                 ) : null}
               </div>
