@@ -2,7 +2,7 @@ import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
 import { AsanaHeaderStatus } from "@/components/integrations/asana-header-status";
 import { TeamStatusHeaderIndicator } from "@/components/team-status/header-indicator";
-import { cn } from "@/lib/utils/cn";
+import { NavDropdown } from "@/components/layout/nav-dropdown";
 
 type NavItem = { href: string; label: string };
 
@@ -48,56 +48,14 @@ export function AppHeader({
           SaaSTimeTrack
         </Link>
 
-        <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto md:flex" aria-label="Main">
-          {navItems.map((item) => (
-            <NavLink key={item.href} href={item.href} label={item.label} />
-          ))}
-          <details className="group relative">
-            <summary
-              className={cn(
-                "flex cursor-pointer list-none items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm text-zinc-300 transition",
-                "hover:bg-zinc-800/80 hover:text-zinc-100",
-                "[&::-webkit-details-marker]:hidden",
-              )}
-            >
-              Timesheet
-              <span className="text-[10px] text-zinc-500 transition group-open:rotate-180">▾</span>
-            </summary>
-            <div className="absolute left-0 top-[calc(100%+0.35rem)] z-30 min-w-44 rounded-lg border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
-              {timesheetItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="block rounded-md px-2.5 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </div>
-          </details>
-          <details className="group relative">
-            <summary
-              className={cn(
-                "flex cursor-pointer list-none items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm text-zinc-300 transition",
-                "hover:bg-zinc-800/80 hover:text-zinc-100",
-                "[&::-webkit-details-marker]:hidden",
-              )}
-            >
-              Billing
-              <span className="text-[10px] text-zinc-500 transition group-open:rotate-180">▾</span>
-            </summary>
-            <div className="absolute left-0 top-[calc(100%+0.35rem)] z-30 min-w-52 rounded-lg border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
-              {billingItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="block rounded-md px-2.5 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </div>
-          </details>
+        <nav className="hidden min-w-0 flex-1 items-center gap-0.5 md:flex" aria-label="Main">
+          <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
+            {navItems.map((item) => (
+              <NavLink key={item.href} href={item.href} label={item.label} />
+            ))}
+          </div>
+          <NavDropdown label="Timesheet" items={timesheetItems} />
+          <NavDropdown label="Billing" items={billingItems} />
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
