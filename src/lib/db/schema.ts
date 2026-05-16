@@ -74,6 +74,7 @@ export const billingSettings = pgTable("billing_settings", {
     .references(() => companies.id, { onDelete: "cascade" }),
   toRecipientsJson: jsonb("to_recipients_json").notNull().default([]),
   ccRecipientsJson: jsonb("cc_recipients_json").notNull().default([]),
+  bccRecipientsJson: jsonb("bcc_recipients_json").notNull().default([]),
   defaultBodyFooter: text("default_body_footer"),
   submissionInstructions: text("submission_instructions"),
   overdueBannerEnabled: boolean("overdue_banner_enabled").notNull().default(true),

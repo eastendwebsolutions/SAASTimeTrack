@@ -11,6 +11,7 @@ type SettingsResponse = {
     companyId: string;
     toRecipientsJson: string[];
     ccRecipientsJson: string[];
+    bccRecipientsJson: string[];
     defaultBodyFooter: string | null;
     submissionInstructions: string | null;
     overdueBannerEnabled: boolean;
@@ -24,6 +25,7 @@ export function BillingSettingsClient({ isSuperAdmin }: { isSuperAdmin: boolean 
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [toRecipients, setToRecipients] = useState("");
   const [ccRecipients, setCcRecipients] = useState("");
+  const [bccRecipients, setBccRecipients] = useState("");
   const [footer, setFooter] = useState("");
   const [instructions, setInstructions] = useState("");
   const [cutoff, setCutoff] = useState("");
@@ -44,6 +46,7 @@ export function BillingSettingsClient({ isSuperAdmin }: { isSuperAdmin: boolean 
     setCompanyId(activeCompanyId);
     setToRecipients((json.settings?.toRecipientsJson ?? []).join(", "));
     setCcRecipients((json.settings?.ccRecipientsJson ?? []).join(", "));
+    setBccRecipients((json.settings?.bccRecipientsJson ?? []).join(", "));
     setFooter(json.settings?.defaultBodyFooter ?? "");
     setInstructions(json.settings?.submissionInstructions ?? "");
     setOverdueEnabled(json.settings?.overdueBannerEnabled ?? true);
@@ -66,6 +69,10 @@ export function BillingSettingsClient({ isSuperAdmin }: { isSuperAdmin: boolean 
         .map((item) => item.trim())
         .filter(Boolean),
       ccRecipients: ccRecipients
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+      bccRecipients: bccRecipients
         .split(",")
         .map((item) => item.trim())
         .filter(Boolean),
@@ -116,12 +123,18 @@ export function BillingSettingsClient({ isSuperAdmin }: { isSuperAdmin: boolean 
         ) : null}
 
         <label className="space-y-1 text-sm text-zinc-300">
-          TO Recipients (comma separated)
+          TO recipients (comma separated)
+          <p className="text-xs text-zinc-500">Invoice emails are sent to these addresses. Bill To on the invoice uses this list.</p>
           <input className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-sm" value={toRecipients} onChange={(e) => setToRecipients(e.target.value)} />
         </label>
         <label className="space-y-1 text-sm text-zinc-300">
-          CC Recipients (comma separated)
+          CC recipients (comma separated)
           <input className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-sm" value={ccRecipients} onChange={(e) => setCcRecipients(e.target.value)} />
+        </label>
+        <label className="space-y-1 text-sm text-zinc-300">
+          BCC recipients (comma separated)
+          <p className="text-xs text-zinc-500">Optional. These addresses receive a blind copy of each invoice submission.</p>
+          <input className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-sm" value={bccRecipients} onChange={(e) => setBccRecipients(e.target.value)} />
         </label>
         <label className="space-y-1 text-sm text-zinc-300">
           Submission instructions

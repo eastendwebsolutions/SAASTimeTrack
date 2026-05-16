@@ -33,6 +33,16 @@ export function formatInvoiceBillFromName(snapshot: UserBillingSnapshot) {
   return `${snapshot.firstName} ${snapshot.lastName}`.trim();
 }
 
+export function formatBillToHtml(billToRecipients: string[]) {
+  if (!billToRecipients.length) return "—";
+  return billToRecipients.map((email) => escapeHtml(email)).join("<br/>");
+}
+
+export function formatBillToLines(billToRecipients: string[]) {
+  if (!billToRecipients.length) return ["—"];
+  return billToRecipients;
+}
+
 function formatAddress(snapshot: UserBillingSnapshot) {
   const cityLine = [snapshot.city, snapshot.state?.trim() || snapshot.province?.trim(), snapshot.zip].filter(Boolean).join(", ");
   const lines = [
@@ -53,7 +63,7 @@ export function buildInvoiceHtml({
   invoiceNumber,
   periodLabel,
   submittedLabel,
-  companyName,
+  billToRecipients,
   billingSnapshot,
   lineItems,
   userBody,
@@ -62,7 +72,7 @@ export function buildInvoiceHtml({
   invoiceNumber: string;
   periodLabel: string;
   submittedLabel: string;
-  companyName: string;
+  billToRecipients: string[];
   billingSnapshot: UserBillingSnapshot;
   lineItems: InvoiceLineItem[];
   userBody: string | null;
@@ -91,7 +101,7 @@ export function buildInvoiceHtml({
           </td>
           <td style="vertical-align:top;width:50%;">
             <strong>Bill To</strong><br/>
-            ${escapeHtml(companyName)}<br/>
+            ${formatBillToHtml(billToRecipients)}<br/>
             <strong>Billing Period:</strong> ${escapeHtml(periodLabel)}<br/>
             <strong>Submitted:</strong> ${escapeHtml(submittedLabel)}
           </td>

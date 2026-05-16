@@ -31,7 +31,7 @@ type BillingCurrentResponse = {
     submissionInstructions: string | null;
     defaultBodyFooter: string | null;
   };
-  companyName: string;
+  billToRecipients: string[];
 };
 
 type HistoryRow = {
@@ -354,7 +354,7 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
           <InvoicePreview
             invoiceNumber={invoiceNumber.trim()}
             periodLabel={current.period.label}
-            companyName={current.companyName}
+            billToRecipients={current.billToRecipients}
             billingSnapshot={billingSnapshot}
             lineItems={parsedLineItems}
             userBody={notes.trim() || null}

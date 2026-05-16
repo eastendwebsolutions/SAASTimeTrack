@@ -74,10 +74,7 @@ export async function getCurrentBillingState(user: AppUser) {
         : `Your invoice for ${period.label} has not been submitted.`
       : null;
 
-  const company = await db.query.companies.findFirst({
-    where: eq(companies.id, user.companyId),
-    columns: { name: true },
-  });
+  const toRecipients = (settings?.toRecipientsJson as string[] | undefined) ?? [];
 
   return {
     period,
@@ -87,7 +84,7 @@ export async function getCurrentBillingState(user: AppUser) {
     settings: settings ?? null,
     profile: profileInput,
     profileComplete,
-    companyName: company?.name ?? "Company",
+    billToRecipients: toRecipients,
   };
 }
 
@@ -133,6 +130,7 @@ export async function createBillingSubmission({
   const settings = current.settings;
   const toRecipients = (settings?.toRecipientsJson as string[] | undefined) ?? [];
   const ccRecipients = (settings?.ccRecipientsJson as string[] | undefined) ?? [];
+  const bccRecipients = (settings?.bccRecipientsJson as string[] | undefined) ?? [];
   if (!toRecipients.length) {
     throw new Error("Billing recipients are not configured for your company.");
   }
@@ -172,16 +170,11 @@ export async function createBillingSubmission({
     })
     .returning();
 
-  const company = await db.query.companies.findFirst({
-    where: eq(companies.id, user.companyId),
-    columns: { name: true },
-  });
-
   try {
     await sendBillingSubmissionEmail({
       userName,
       userEmail: user.email,
-      companyName: company?.name ?? "Unknown Company",
+      billToRecipients: toRecipients,
       periodStart: current.period.periodStartDate,
       periodEnd: current.period.periodEndDate,
       submittedAt: now,
@@ -190,6 +183,7 @@ export async function createBillingSubmission({
       subject,
       to: toRecipients,
       cc: ccRecipients,
+      bcc: bccRecipients,
       invoiceNumber: parsed.invoiceNumber,
       lineItems: parsed.lineItems,
       billingSnapshot,
@@ -391,6 +385,7 @@ export async function upsertBillingSettings({
   companyId,
   toRecipients,
   ccRecipients,
+  bccRecipients,
   defaultBodyFooter,
   submissionInstructions,
   overdueBannerEnabled,
@@ -400,6 +395,7 @@ export async function upsertBillingSettings({
   companyId: string;
   toRecipients: string[];
   ccRecipients: string[];
+  bccRecipients: string[];
   defaultBodyFooter: string | null;
   submissionInstructions: string | null;
   overdueBannerEnabled: boolean;
@@ -411,6 +407,7 @@ export async function upsertBillingSettings({
       companyId,
       toRecipientsJson: toRecipients,
       ccRecipientsJson: ccRecipients,
+      bccRecipientsJson: bccRecipients,
       defaultBodyFooter,
       submissionInstructions,
       overdueBannerEnabled,
@@ -422,6 +419,7 @@ export async function upsertBillingSettings({
       set: {
         toRecipientsJson: toRecipients,
         ccRecipientsJson: ccRecipients,
+        bccRecipientsJson: bccRecipients,
         defaultBodyFooter,
         submissionInstructions,
         overdueBannerEnabled,

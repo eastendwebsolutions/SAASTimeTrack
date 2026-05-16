@@ -23,7 +23,7 @@ describe("invoice PDF", () => {
       invoiceNumber: "INV-2026-014",
       periodLabel: "May 8, 2026 to May 14, 2026",
       submittedLabel: "May 16, 2026 10:00 AM ET",
-      companyName: "Acme Co",
+      billToRecipients: ["billing@acme.com", "ap@acme.com"],
       billingSnapshot: sampleSnapshot,
       lineItems: [{ description: "Billing Period: May 8, 2026 to May 14, 2026", amount: 1500 }],
       userBody: null,

@@ -52,6 +52,7 @@ export async function PUT(request: Request) {
       companyId: targetCompanyId,
       toRecipients: parsed.data.toRecipients,
       ccRecipients: parsed.data.ccRecipients,
+      bccRecipients: parsed.data.bccRecipients,
       defaultBodyFooter: parsed.data.defaultBodyFooter ?? null,
       submissionInstructions: parsed.data.submissionInstructions ?? null,
       overdueBannerEnabled: parsed.data.overdueBannerEnabled,

@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 type InvoicePreviewProps = {
   invoiceNumber: string;
   periodLabel: string;
-  companyName: string;
+  billToRecipients: string[];
   billingSnapshot: UserBillingSnapshot;
   lineItems: InvoiceLineItem[];
   userBody?: string | null;
@@ -18,7 +18,7 @@ type InvoicePreviewProps = {
 export function InvoicePreview({
   invoiceNumber,
   periodLabel,
-  companyName,
+  billToRecipients,
   billingSnapshot,
   lineItems,
   userBody,
@@ -30,7 +30,7 @@ export function InvoicePreview({
     invoiceNumber,
     periodLabel,
     submittedLabel,
-    companyName,
+    billToRecipients,
     billingSnapshot,
     lineItems,
     userBody: userBody ?? null,

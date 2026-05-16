@@ -82,6 +82,7 @@ export const billingSettingsSchema = z.object({
   companyId: z.string().uuid().optional(),
   toRecipients: z.array(z.email()).min(1, "At least one TO recipient is required."),
   ccRecipients: z.array(z.email()).default([]),
+  bccRecipients: z.array(z.email()).default([]),
   defaultBodyFooter: z.string().max(5000).optional().nullable(),
   submissionInstructions: z.string().max(5000).optional().nullable(),
   overdueBannerEnabled: z.boolean().default(true),

@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { InvoiceLineItem, UserBillingSnapshot } from "@/lib/validation/billing";
-import { formatInvoiceBillFromName, formatInvoiceCurrency, sumInvoiceLineItems } from "./invoice";
+import { formatBillToLines, formatInvoiceBillFromName, formatInvoiceCurrency, sumInvoiceLineItems } from "./invoice";
 
 const PAGE_WIDTH = 612;
 const PAGE_HEIGHT = 792;
@@ -11,7 +11,7 @@ type BuildInvoicePdfInput = {
   invoiceNumber: string;
   periodLabel: string;
   submittedLabel: string;
-  companyName: string;
+  billToRecipients: string[];
   billingSnapshot: UserBillingSnapshot;
   lineItems: InvoiceLineItem[];
   userBody: string | null;
@@ -99,7 +99,7 @@ export async function buildInvoicePdf(input: BuildInvoicePdfInput): Promise<Buff
   page.drawText("Bill To", { x: billToX, y: rightY, size: 11, font: fontBold });
   rightY -= 14;
   const billToLines = [
-    input.companyName,
+    ...formatBillToLines(input.billToRecipients),
     `Billing Period: ${input.periodLabel}`,
     `Submitted: ${input.submittedLabel}`,
   ];

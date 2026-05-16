@@ -10,6 +10,7 @@ export type ResendAttachment = {
 export async function sendResendEmail({
   to,
   cc,
+  bcc,
   subject,
   html,
   attachments,
@@ -17,6 +18,7 @@ export async function sendResendEmail({
 }: {
   to: string[];
   cc: string[];
+  bcc?: string[];
   subject: string;
   html: string;
   attachments: ResendAttachment[];
@@ -32,7 +34,8 @@ export async function sendResendEmail({
   const result = await resend.emails.send({
     from: fromAddress,
     to,
-    cc,
+    cc: cc.length ? cc : undefined,
+    bcc: bcc?.length ? bcc : undefined,
     subject,
     html,
     attachments: attachments.map((attachment) => ({

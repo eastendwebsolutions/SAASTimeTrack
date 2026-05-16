@@ -7,7 +7,7 @@ import { formatSubmittedAtEasternLabel, getBillingPeriodLabel } from "./period";
 export async function sendBillingSubmissionEmail({
   userName,
   userEmail,
-  companyName,
+  billToRecipients,
   periodStart,
   periodEnd,
   submittedAt,
@@ -16,13 +16,14 @@ export async function sendBillingSubmissionEmail({
   subject,
   to,
   cc,
+  bcc,
   invoiceNumber,
   lineItems,
   billingSnapshot,
 }: {
   userName: string;
   userEmail: string;
-  companyName: string;
+  billToRecipients: string[];
   periodStart: Date;
   periodEnd: Date;
   submittedAt: Date;
@@ -31,6 +32,7 @@ export async function sendBillingSubmissionEmail({
   subject: string;
   to: string[];
   cc: string[];
+  bcc: string[];
   invoiceNumber: string;
   lineItems: InvoiceLineItem[];
   billingSnapshot: UserBillingSnapshot;
@@ -47,7 +49,7 @@ export async function sendBillingSubmissionEmail({
     invoiceNumber,
     periodLabel: billingPeriod,
     submittedLabel,
-    companyName,
+    billToRecipients,
     billingSnapshot: snapshot,
     lineItems,
     userBody,
@@ -58,7 +60,7 @@ export async function sendBillingSubmissionEmail({
     invoiceNumber,
     periodLabel: billingPeriod,
     submittedLabel,
-    companyName,
+    billToRecipients,
     billingSnapshot: snapshot,
     lineItems,
     userBody,
@@ -68,6 +70,7 @@ export async function sendBillingSubmissionEmail({
   return sendResendEmail({
     to,
     cc,
+    bcc,
     subject,
     html,
     attachments: [
