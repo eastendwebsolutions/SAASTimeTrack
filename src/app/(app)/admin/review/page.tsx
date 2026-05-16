@@ -1,9 +1,11 @@
 import { and, eq, inArray } from "drizzle-orm";
+import { AdminReviewNoticeBanner } from "@/components/admin/admin-review-notice-banner";
 import { AuditTrailTable } from "@/components/audit/audit-trail-table";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { canReviewEntries, isSuperAdmin } from "@/lib/auth/rbac";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
+import { parseAdminReviewNotice } from "@/lib/admin/review-notice";
 import { db } from "@/lib/db";
 import { adminNotifications, companies, entryComments, timeEntries, timesheets, users } from "@/lib/db/schema";
 import { SuperAdminReviewPanel } from "@/components/admin/super-admin-review-panel";
@@ -11,7 +13,7 @@ import { listAuditChanges } from "@/lib/services/audit-log";
 import { getClerkAccessStatus } from "@/lib/services/clerk-admin";
 import { getWeekBounds } from "@/lib/services/week";
 
-type SearchParams = Promise<{ adminAuditPage?: string }>;
+type SearchParams = Promise<{ adminAuditPage?: string; notice?: string; noticeType?: string }>;
 
 export default async function AdminReviewPage({ searchParams }: { searchParams: SearchParams }) {
   const user = await getOrCreateCurrentUser();
@@ -20,12 +22,7 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
   }
   const params = await searchParams;
   const adminAuditPage = Math.max(1, Number(params.adminAuditPage ?? "1") || 1);
-  const audit = await listAuditChanges({
-    companyId: user.companyId,
-    pageKey: "admin_review",
-    page: adminAuditPage,
-    pageSize: 10,
-  });
+  const notice = parseAdminReviewNotice(params);
 
   const entries = await db.query.timeEntries.findMany({
     where: isSuperAdmin(user.role)
@@ -95,6 +92,12 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
       columns: { id: true, name: true, asanaWorkspaceId: true },
       orderBy: (table, { asc }) => [asc(table.name)],
     });
+    const audit = await listAuditChanges({
+      companyIds: allCompanies.map((row) => row.id),
+      pageKey: "admin_review",
+      page: adminAuditPage,
+      pageSize: 10,
+    });
     const allWorkspaceAdmins = await db.query.ppWorkspaceAdmins.findMany();
     const allProjects = await db.query.projects.findMany({
       columns: { id: true, name: true },
@@ -136,6 +139,7 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
 
     return (
       <div className="space-y-6">
+        {notice ? <AdminReviewNoticeBanner type={notice.type} message={notice.message} /> : null}
         <SuperAdminReviewPanel
           users={allUsers.map((row) => ({
             id: row.id,
@@ -257,9 +261,16 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
     }),
   );
   const statusByClerkUserId = new Map(companyUserStatuses.map((status) => [status.clerkUserId, status]));
+  const audit = await listAuditChanges({
+    companyIds: workspaceCompanyIds,
+    pageKey: "admin_review",
+    page: adminAuditPage,
+    pageSize: 10,
+  });
 
   return (
     <div className="space-y-6">
+      {notice ? <AdminReviewNoticeBanner type={notice.type} message={notice.message} /> : null}
       <h1 className="text-2xl font-semibold">Admin Review</h1>
       <div className="space-y-3">
         <h2 className="text-lg font-medium">Workspace Users</h2>

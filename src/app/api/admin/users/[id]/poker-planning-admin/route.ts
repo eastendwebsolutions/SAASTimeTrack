@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+import { adminReviewRedirect } from "@/lib/admin/review-notice";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { isSuperAdmin } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   const enabled = payload.get("enabled") === "1";
   const workspaceId = String(payload.get("workspaceId") ?? "").trim();
   if (!workspaceId) {
-    return NextResponse.json({ error: "workspaceId is required" }, { status: 400 });
+    return adminReviewRedirect(request.url, { type: "error", message: "Workspace is required for Poker Planning admin changes." });
   }
 
   const target = await db.query.users.findFirst({
@@ -30,11 +31,12 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     columns: {
       id: true,
       companyId: true,
+      email: true,
     },
   });
 
   if (!target) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
+    return adminReviewRedirect(request.url, { type: "error", message: "User not found." });
   }
 
   const existingAccess = await db.query.ppWorkspaceAdmins.findFirst({
@@ -78,9 +80,19 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       fieldName: "Poker Planning Admin",
       beforeValue: existingAccess ? "Enabled" : "Disabled",
       afterValue: enabled ? "Enabled" : "Disabled",
-      metadataJson: { workspaceId, targetUserId: target.id },
+      metadataJson: { workspaceId, targetUserId: target.id, targetEmail: target.email },
     },
   ]);
 
-  return NextResponse.redirect(new URL("/admin/review", request.url));
+  const alreadyInDesiredState = Boolean(existingAccess) === enabled;
+  return adminReviewRedirect(request.url, {
+    type: "success",
+    message: alreadyInDesiredState
+      ? enabled
+        ? `${target.email} already has Poker Planning admin for this workspace.`
+        : `${target.email} did not have Poker Planning admin for this workspace.`
+      : enabled
+        ? `Granted Poker Planning admin for ${target.email}.`
+        : `Revoked Poker Planning admin for ${target.email}.`,
+  });
 }

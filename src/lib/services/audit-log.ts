@@ -1,4 +1,4 @@
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { auditChangeLog, users } from "@/lib/db/schema";
 
@@ -64,7 +64,8 @@ export async function logAuditChanges(changes: AuditChangeInput[]) {
 }
 
 export async function listAuditChanges(args: {
-  companyId: string;
+  companyId?: string;
+  companyIds?: string[];
   pageKey: string;
   page: number;
   pageSize: number;
@@ -72,9 +73,26 @@ export async function listAuditChanges(args: {
 }) {
   const page = Math.max(1, args.page);
   const offset = (page - 1) * args.pageSize;
+  const companyFilter =
+    args.companyIds && args.companyIds.length > 0
+      ? inArray(auditChangeLog.companyId, args.companyIds)
+      : args.companyId
+        ? eq(auditChangeLog.companyId, args.companyId)
+        : null;
+
+  if (!companyFilter) {
+    return {
+      rows: [],
+      page,
+      total: 0,
+      pageSize: args.pageSize,
+      totalPages: 1,
+    };
+  }
+
   const whereClause = args.contextKey
-    ? and(eq(auditChangeLog.companyId, args.companyId), eq(auditChangeLog.pageKey, args.pageKey), eq(auditChangeLog.contextKey, args.contextKey))
-    : and(eq(auditChangeLog.companyId, args.companyId), eq(auditChangeLog.pageKey, args.pageKey));
+    ? and(companyFilter, eq(auditChangeLog.pageKey, args.pageKey), eq(auditChangeLog.contextKey, args.contextKey))
+    : and(companyFilter, eq(auditChangeLog.pageKey, args.pageKey));
 
   let rows: Array<{
     id: string;

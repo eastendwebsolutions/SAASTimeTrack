@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+import { adminReviewRedirect } from "@/lib/admin/review-notice";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { canReviewEntries, isSuperAdmin } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
@@ -26,11 +27,12 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       companyId: true,
       role: true,
       clerkUserId: true,
+      email: true,
     },
   });
 
   if (!target) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
+    return adminReviewRedirect(request.url, { type: "error", message: "User not found." });
   }
   if (!isSuperAdmin(actor.role)) {
     const [actorCompany, targetCompany] = await Promise.all([
@@ -49,14 +51,21 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         actorCompany.asanaWorkspaceId === targetCompany.asanaWorkspaceId,
     );
     if (!sameWorkspace && target.companyId !== actor.companyId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return adminReviewRedirect(request.url, { type: "error", message: "You cannot manage users outside your workspace." });
     }
   }
   if (target.role === "super_admin") {
-    return NextResponse.json({ error: "Cannot revoke super admin access" }, { status: 403 });
+    return adminReviewRedirect(request.url, { type: "error", message: "Super admin access cannot be changed here." });
   }
 
-  await setClerkAccessEnabled(target.clerkUserId, enabled);
+  try {
+    await setClerkAccessEnabled(target.clerkUserId, enabled);
+  } catch {
+    return adminReviewRedirect(request.url, {
+      type: "error",
+      message: `Failed to update SAASTimeTrack access for ${target.email}.`,
+    });
+  }
 
   await logAuditChanges([
     {
@@ -68,9 +77,14 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       fieldName: "SAASTimeTrack Access",
       beforeValue: enabled ? "Revoked" : "Enabled",
       afterValue: enabled ? "Enabled" : "Revoked",
-      metadataJson: { targetUserId: target.id, clerkUserId: target.clerkUserId },
+      metadataJson: { targetUserId: target.id, targetEmail: target.email, clerkUserId: target.clerkUserId },
     },
   ]);
 
-  return NextResponse.redirect(new URL("/admin/review", request.url));
+  return adminReviewRedirect(request.url, {
+    type: "success",
+    message: enabled
+      ? `Restored SAASTimeTrack access for ${target.email}.`
+      : `Revoked SAASTimeTrack access for ${target.email}.`,
+  });
 }
