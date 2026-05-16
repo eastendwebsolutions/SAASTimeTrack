@@ -3,7 +3,7 @@ import { canReviewEntries } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
 import { teamStatusEvents, timeEntries, users } from "@/lib/db/schema";
 import { resolveWorkspaceCompanyIdsForCompanyAdmin, type AdminWorkspaceActor } from "@/lib/services/admin-workspace-scope";
-import { getClerkDisplayNames } from "@/lib/services/clerk-admin";
+import { getClerkUserBasics } from "@/lib/services/clerk-admin";
 import {
   evaluateDayStatus,
   getNowInNy,
@@ -94,11 +94,18 @@ export async function getWorkspaceRosterForCompanyAdmin(actor: AdminWorkspaceAct
   }
 
   const loggedByUser = new Map(loggedRows.map((row) => [row.userId, row.totalMinutes]));
-  const clerkNameMap = await getClerkDisplayNames(workspaceUsers.map((row) => row.clerkUserId));
+  const clerkBasicsMap = await getClerkUserBasics(workspaceUsers.map((row) => row.clerkUserId));
   const now = new Date();
 
-  const members: WorkspaceRosterMember[] = workspaceUsers.map((row) => {
-    const displayName = clerkNameMap.get(row.clerkUserId) ?? displayNameFromEmail(row.email);
+  const activeWorkspaceUsers = workspaceUsers.filter((row) => {
+    const basics = clerkBasicsMap.get(row.clerkUserId);
+    if (!basics) return true;
+    return !basics.isAccessRevoked;
+  });
+
+  const members: WorkspaceRosterMember[] = activeWorkspaceUsers.map((row) => {
+    const basics = clerkBasicsMap.get(row.clerkUserId);
+    const displayName = basics?.displayName ?? displayNameFromEmail(row.email);
     const evaluation = evaluateDayStatus(eventsByUser.get(row.id) ?? [], now);
     return {
       userId: row.id,

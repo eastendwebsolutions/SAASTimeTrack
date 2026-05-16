@@ -86,7 +86,12 @@ function fallbackNameFromUsernameOrId(username: string | null | undefined, clerk
   return clerkUserId;
 }
 
-export async function getClerkDisplayNames(clerkUserIds: string[]) {
+export type ClerkUserBasics = {
+  displayName: string;
+  isAccessRevoked: boolean;
+};
+
+export async function getClerkUserBasics(clerkUserIds: string[]) {
   const uniqueIds = Array.from(new Set(clerkUserIds.filter(Boolean)));
   const results = await Promise.allSettled(
     uniqueIds.map(async (clerkUserId) => {
@@ -95,15 +100,28 @@ export async function getClerkDisplayNames(clerkUserIds: string[]) {
       return {
         clerkUserId,
         displayName: fullName || fallbackNameFromUsernameOrId(payload.username, clerkUserId),
+        isAccessRevoked: Boolean(payload.banned),
       };
     }),
   );
 
-  const nameMap = new Map<string, string>();
+  const basicsMap = new Map<string, ClerkUserBasics>();
   for (const result of results) {
     if (result.status === "fulfilled") {
-      nameMap.set(result.value.clerkUserId, result.value.displayName);
+      basicsMap.set(result.value.clerkUserId, {
+        displayName: result.value.displayName,
+        isAccessRevoked: result.value.isAccessRevoked,
+      });
     }
+  }
+  return basicsMap;
+}
+
+export async function getClerkDisplayNames(clerkUserIds: string[]) {
+  const basicsMap = await getClerkUserBasics(clerkUserIds);
+  const nameMap = new Map<string, string>();
+  for (const [clerkUserId, basics] of basicsMap) {
+    nameMap.set(clerkUserId, basics.displayName);
   }
   return nameMap;
 }
