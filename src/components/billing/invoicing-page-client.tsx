@@ -49,8 +49,13 @@ type HistoryRow = {
 
 type LineItemDraft = { id: string; description: string; amount: string };
 
-function newLineItem(): LineItemDraft {
-  return { id: crypto.randomUUID(), description: "", amount: "" };
+function newLineItem(description = ""): LineItemDraft {
+  return { id: crypto.randomUUID(), description, amount: "" };
+}
+
+function defaultFirstLineDescription(periodLabel: string | undefined) {
+  if (!periodLabel) return "Billing Period: …";
+  return `Billing Period: ${periodLabel}`;
 }
 
 function parseLineItems(items: LineItemDraft[]): InvoiceLineItem[] {
@@ -116,6 +121,19 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
   useEffect(() => {
     void load();
   }, []);
+
+  const firstLinePlaceholder = defaultFirstLineDescription(current?.period?.label);
+
+  useEffect(() => {
+    if (!current?.period?.label) return;
+    const suggested = defaultFirstLineDescription(current.period.label);
+    setLineItems((prev) => {
+      if (!prev.length) return [newLineItem(suggested)];
+      const [first, ...rest] = prev;
+      if (first.description.trim()) return prev;
+      return [{ ...first, description: suggested }, ...rest];
+    });
+  }, [current?.period?.label]);
 
   const parsedLineItems = useMemo(() => parseLineItems(lineItems), [lineItems]);
   const total = useMemo(() => sumInvoiceLineItems(parsedLineItems), [parsedLineItems]);
@@ -185,7 +203,7 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
       }
 
       setInvoiceNumber("");
-      setLineItems([newLineItem()]);
+      setLineItems([newLineItem(defaultFirstLineDescription(current?.period?.label))]);
       setNotes("");
       setShowPreview(false);
       await load();
@@ -277,7 +295,7 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
                   value={item.description}
                   onChange={(event) => updateLineItem(item.id, { description: event.target.value })}
                   className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-sm text-zinc-200"
-                  placeholder={`Line item ${index + 1}`}
+                  placeholder={index === 0 ? firstLinePlaceholder : `Line item ${index + 1}`}
                 />
               </label>
               <label className="space-y-1 text-sm text-zinc-300">
