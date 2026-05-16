@@ -1,8 +1,8 @@
-import { and, asc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, ne, or, sql } from "drizzle-orm";
 import { canReviewEntries } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
-import { teamStatusEvents, timeEntries, users } from "@/lib/db/schema";
-import type { AdminWorkspaceActor } from "@/lib/services/admin-workspace-scope";
+import { asanaConnections, teamStatusEvents, timeEntries, users } from "@/lib/db/schema";
+import { resolveWorkspaceCompanyIdsForCompanyAdmin, type AdminWorkspaceActor } from "@/lib/services/admin-workspace-scope";
 import {
   evaluateDayStatus,
   getNowInNy,
@@ -52,18 +52,38 @@ export async function getWorkspaceRosterForCompanyAdmin(actor: AdminWorkspaceAct
     throw new Error("Company admin access required");
   }
 
-  // Team Today is for the admin's own company team only (not all DB rows sharing asanaWorkspaceId).
-  const companyIds = [actor.companyId];
+  const companyIds = await resolveWorkspaceCompanyIdsForCompanyAdmin(actor.companyId);
+  if (companyIds.length === 0) {
+    const todayKey = getNowInNy().dateKey;
+    return {
+      dateKey: todayKey,
+      timezone: TEAM_STATUS_TIMEZONE,
+      memberCount: 0,
+      members: [],
+    };
+  }
+
   const todayKey = getNowInNy().dateKey;
   const todayStart = nyDateKeyToTimestamp(todayKey);
   const tomorrowStart = new Date(todayStart);
   tomorrowStart.setDate(tomorrowStart.getDate() + 1);
 
-  const workspaceUsers = await db.query.users.findMany({
-    where: inArray(users.companyId, companyIds),
-    columns: { id: true, email: true, displayName: true, role: true },
-    orderBy: (table, { asc: ascCol }) => [ascCol(table.email)],
-  });
+  const workspaceUsers = await db
+    .selectDistinct({
+      id: users.id,
+      email: users.email,
+      displayName: users.displayName,
+      role: users.role,
+    })
+    .from(users)
+    .innerJoin(asanaConnections, eq(asanaConnections.userId, users.id))
+    .where(
+      and(
+        inArray(users.companyId, companyIds),
+        or(eq(users.companyId, actor.companyId), ne(users.role, "super_admin")),
+      ),
+    )
+    .orderBy(asc(users.email));
 
   const [statusEvents, loggedRows] = await Promise.all([
     db.query.teamStatusEvents.findMany({

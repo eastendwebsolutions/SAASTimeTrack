@@ -58,8 +58,6 @@ type AuditRow = {
 
 type Props = {
   currentUserId: string;
-  /** Company id for the logged-in company admin (Team Today scope). */
-  actorCompanyId: string;
   companyUsers: CompanyUserRow[];
   notifications: NotificationRow[];
   reviewSheets: TimesheetRow[];
@@ -75,7 +73,6 @@ type Props = {
 
 export function CompanyAdminReviewPanel({
   currentUserId,
-  actorCompanyId,
   companyUsers,
   notifications,
   reviewSheets,
@@ -85,13 +82,9 @@ export function CompanyAdminReviewPanel({
   audit,
 }: Props) {
   const auditQuery = { tab: "audit" };
-  const teamTodayUsers = useMemo(
-    () => companyUsers.filter((user) => user.companyId === actorCompanyId),
-    [actorCompanyId, companyUsers],
-  );
   const revokedUserIds = useMemo(
-    () => teamTodayUsers.filter((user) => user.isAccessRevoked).map((user) => user.id),
-    [teamTodayUsers],
+    () => companyUsers.filter((user) => user.isAccessRevoked).map((user) => user.id),
+    [companyUsers],
   );
 
   return (
@@ -304,10 +297,7 @@ export function CompanyAdminReviewPanel({
         />
       </div>
       <aside className="w-full shrink-0 xl:w-[22rem] xl:sticky xl:top-6 xl:self-start">
-        <AdminWorkspaceTeamSidebar
-          allowedUserIds={teamTodayUsers.map((user) => user.id)}
-          revokedUserIds={revokedUserIds}
-        />
+        <AdminWorkspaceTeamSidebar revokedUserIds={revokedUserIds} />
       </aside>
     </div>
   );
