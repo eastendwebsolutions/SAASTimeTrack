@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { adminUserPermissionsRowClassName } from "@/components/admin/admin-user-row-styles";
 
 export type SuperAdminUserRow = {
   id: string;
@@ -201,7 +202,7 @@ export function SuperAdminUsersSection({ users, companies, workspaceAdmins }: Us
           const pokerEnabled = workspaceId != null ? workspaceAdminSet.has(`${user.id}:${workspaceId}`) : false;
 
           return (
-            <article key={user.id} className="p-4 sm:p-5">
+            <article key={user.id} className={adminUserPermissionsRowClassName(user.role)}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1 space-y-1">
                   <p className="truncate text-sm font-medium text-zinc-100" title={user.email}>

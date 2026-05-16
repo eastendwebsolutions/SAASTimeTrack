@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { adminUserPermissionsRowClassName } from "@/components/admin/admin-user-row-styles";
 import { AdminReviewTabs } from "@/components/admin/admin-review-tabs";
 import { AdminWorkspaceTeamSidebar } from "@/components/admin/admin-workspace-team-sidebar";
 import { AuditTrailTable } from "@/components/audit/audit-trail-table";
@@ -103,7 +104,7 @@ export function CompanyAdminReviewPanel({
                 const isRevoked = companyUser.isAccessRevoked;
                 const isActiveNow = companyUser.id === currentUserId ? true : companyUser.isActiveNow;
                 return (
-                  <article key={companyUser.id} className="p-4 sm:p-5">
+                  <article key={companyUser.id} className={adminUserPermissionsRowClassName(companyUser.role)}>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1 space-y-1">
                         <p className="truncate text-sm font-medium text-zinc-100" title={companyUser.email}>
