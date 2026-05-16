@@ -58,11 +58,16 @@ function statusStyles(status: RosterMember["status"]) {
 }
 
 type AdminWorkspaceTeamSidebarProps = {
+  /** App user ids allowed in Team Today (same company as the admin). */
+  allowedUserIds?: string[];
   /** App user ids with revoked SAASTimeTrack access (from admin Users list). */
   revokedUserIds?: string[];
 };
 
-export function AdminWorkspaceTeamSidebar({ revokedUserIds = [] }: AdminWorkspaceTeamSidebarProps) {
+export function AdminWorkspaceTeamSidebar({
+  allowedUserIds,
+  revokedUserIds = [],
+}: AdminWorkspaceTeamSidebarProps) {
   const [roster, setRoster] = useState<RosterPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -94,10 +99,15 @@ export function AdminWorkspaceTeamSidebar({ revokedUserIds = [] }: AdminWorkspac
     };
   }, [loadRoster]);
 
+  const allowedIdSet = useMemo(() => (allowedUserIds ? new Set(allowedUserIds) : null), [allowedUserIds]);
   const revokedIdSet = useMemo(() => new Set(revokedUserIds), [revokedUserIds]);
   const members = useMemo(
-    () => (roster?.members ?? []).filter((member) => !revokedIdSet.has(member.userId)),
-    [revokedIdSet, roster?.members],
+    () =>
+      (roster?.members ?? []).filter((member) => {
+        if (allowedIdSet && !allowedIdSet.has(member.userId)) return false;
+        return !revokedIdSet.has(member.userId);
+      }),
+    [allowedIdSet, revokedIdSet, roster?.members],
   );
   const workingCount = useMemo(() => members.filter((member) => member.status === "Working").length, [members]);
 
@@ -123,7 +133,7 @@ export function AdminWorkspaceTeamSidebar({ revokedUserIds = [] }: AdminWorkspac
           </button>
         </div>
         <p className="mt-2 text-xs text-zinc-400">
-          {workingCount} working · {members.length} in workspace
+          {workingCount} working · {members.length} on your team
         </p>
       </div>
 

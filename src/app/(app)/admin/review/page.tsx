@@ -302,6 +302,7 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
       <Suspense fallback={<p className="text-zinc-400">Loading admin…</p>}>
         <CompanyAdminReviewPanel
           currentUserId={user.id}
+          actorCompanyId={user.companyId}
           companyUsers={companyUsers.map((companyUser) => {
             const status = statusByClerkUserId.get(companyUser.clerkUserId);
             return {

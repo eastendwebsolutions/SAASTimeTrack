@@ -2,7 +2,7 @@ import { and, asc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { canReviewEntries } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
 import { teamStatusEvents, timeEntries, users } from "@/lib/db/schema";
-import { resolveWorkspaceCompanyIdsForCompanyAdmin, type AdminWorkspaceActor } from "@/lib/services/admin-workspace-scope";
+import type { AdminWorkspaceActor } from "@/lib/services/admin-workspace-scope";
 import {
   evaluateDayStatus,
   getNowInNy,
@@ -52,17 +52,8 @@ export async function getWorkspaceRosterForCompanyAdmin(actor: AdminWorkspaceAct
     throw new Error("Company admin access required");
   }
 
-  const companyIds = await resolveWorkspaceCompanyIdsForCompanyAdmin(actor.companyId);
-  if (companyIds.length === 0) {
-    const todayKey = getNowInNy().dateKey;
-    return {
-      dateKey: todayKey,
-      timezone: TEAM_STATUS_TIMEZONE,
-      memberCount: 0,
-      members: [],
-    };
-  }
-
+  // Team Today is for the admin's own company team only (not all DB rows sharing asanaWorkspaceId).
+  const companyIds = [actor.companyId];
   const todayKey = getNowInNy().dateKey;
   const todayStart = nyDateKeyToTimestamp(todayKey);
   const tomorrowStart = new Date(todayStart);
