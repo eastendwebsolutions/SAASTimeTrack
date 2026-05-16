@@ -10,6 +10,7 @@ type ConfigResponse = {
   deliveryMethod: "email" | "webhook";
   channelLabel: string | null;
   destinationHint: string | null;
+  destinationConfigured?: boolean;
   lastTestedAt: string | null;
   lastError: string | null;
   resendReady: boolean;
@@ -30,6 +31,7 @@ export function TeamStatusTeamsSettingsPanel() {
   const [destinationHint, setDestinationHint] = useState<string | null>(null);
   const [lastTestedAt, setLastTestedAt] = useState<string | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [destinationConfigured, setDestinationConfigured] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -41,6 +43,7 @@ export function TeamStatusTeamsSettingsPanel() {
       setDeliveryMethod(payload.deliveryMethod);
       setChannelLabel(payload.channelLabel ?? "Team Member Status");
       setDestinationHint(payload.destinationHint);
+      setDestinationConfigured(Boolean(payload.destinationConfigured));
       setLastTestedAt(payload.lastTestedAt);
       setLastError(payload.lastError);
       setResendReady(payload.resendReady);
@@ -73,11 +76,27 @@ export function TeamStatusTeamsSettingsPanel() {
           clearDestination,
         }),
       });
-      const payload = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+        warning?: string | null;
+        destinationHint?: string | null;
+        destinationConfigured?: boolean;
+      };
       if (!response.ok) {
         throw new Error(payload.error ?? `Unable to save settings (${response.status}).`);
       }
-      setNotice(payload.message ?? "Settings saved.");
+      const enteredDestination = destination.trim();
+      if (enteredDestination && !payload.destinationConfigured) {
+        throw new Error(
+          "The server did not confirm your channel email was saved. Try again or contact support if this persists.",
+        );
+      }
+      setNotice(
+        [payload.message ?? "Settings saved.", payload.warning, payload.destinationHint ? `Saved: ${payload.destinationHint}` : null]
+          .filter(Boolean)
+          .join(" "),
+      );
       setDestination("");
       await load();
     } catch (err) {
@@ -166,22 +185,30 @@ export function TeamStatusTeamsSettingsPanel() {
             {deliveryMethod === "email" ? "Teams channel email" : "Workflow webhook URL"}
           </label>
           <input
-            type={deliveryMethod === "email" ? "email" : "url"}
+            type="text"
+            inputMode={deliveryMethod === "email" ? "email" : "url"}
+            autoComplete="off"
+            spellCheck={false}
             value={destination}
             onChange={(event) => setDestination(event.target.value)}
             placeholder={
               deliveryMethod === "email"
-                ? "team-member-status@thread.tacv2.teams.ms"
+                ? "56474809.Restori.onmicrosoft.com@amer.teams.ms"
                 : "https://..."
             }
-            className="w-full max-w-xl rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+            className="w-full max-w-xl rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 font-mono text-sm text-zinc-100"
           />
-          {destinationHint ? (
-            <p className="mt-1 text-xs text-zinc-500">
-              Saved destination: <span className="font-mono text-zinc-400">{destinationHint}</span>
+          {destinationConfigured && destinationHint ? (
+            <p className="mt-1 text-xs text-emerald-300/90">
+              Saved channel email: <span className="font-mono text-emerald-200">{destinationHint}</span>
             </p>
+          ) : destinationConfigured ? (
+            <p className="mt-1 text-xs text-emerald-300/90">A channel destination is saved (masked for security).</p>
           ) : (
-            <p className="mt-1 text-xs text-zinc-500">Leave blank to keep the current saved destination.</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Paste the full address from Teams, then click <strong>Save settings</strong>. The field clears after save;
+              your saved address appears above in green.
+            </p>
           )}
         </div>
 
@@ -205,8 +232,8 @@ export function TeamStatusTeamsSettingsPanel() {
         {deliveryMethod === "email" && !resendReady ? (
           <p className="text-sm text-amber-300">
             Email delivery is not configured on the server yet (Resend / from address). You can still{" "}
-            <strong>save</strong> your channel email below with notifications turned off, then enable after your
-            platform admin configures email—or switch to webhook delivery.
+            <strong>save</strong> your channel email (Enable can stay off). Turn Enable on after Resend is ready—or use
+            webhook delivery.
           </p>
         ) : null}
 

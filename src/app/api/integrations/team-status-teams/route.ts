@@ -8,6 +8,7 @@ import {
   upsertTeamStatusTeamsChannelConfig,
 } from "@/lib/services/team-status/teams-channel-config";
 import { isTeamStatusTeamsEmailDeliveryReady } from "@/lib/services/team-status/teams-channel-env";
+import { validateTeamsChannelDestination } from "@/lib/services/team-status/teams-channel-validation";
 
 const saveSchema = z.object({
   enabled: z.boolean(),
@@ -16,21 +17,6 @@ const saveSchema = z.object({
   destination: z.string().max(2000).nullable().optional(),
   clearDestination: z.boolean().optional(),
 });
-
-function validateDestination(method: "email" | "webhook", destination: string) {
-  const trimmed = destination.trim();
-  if (method === "email") {
-    const at = trimmed.indexOf("@");
-    if (at <= 0 || at === trimmed.length - 1) {
-      throw new Error("Enter a valid Microsoft Teams channel email address.");
-    }
-    return;
-  }
-  const url = new URL(trimmed);
-  if (url.protocol !== "https:") {
-    throw new Error("Webhook URL must use HTTPS.");
-  }
-}
 
 export async function GET() {
   const user = await getOrCreateCurrentUser();
@@ -45,6 +31,7 @@ export async function GET() {
 
     return NextResponse.json({
       ...publicConfig,
+      destinationConfigured: Boolean(config.destination?.trim()),
       resendReady: isTeamStatusTeamsEmailDeliveryReady(),
     });
   } catch (error) {
@@ -68,16 +55,17 @@ export async function PUT(request: NextRequest) {
 
   try {
     const existing = await getTeamStatusTeamsChannelConfig(user.companyId);
-    const destination =
+    const rawDestination =
       parsed.data.destination !== undefined && parsed.data.destination !== null
         ? parsed.data.destination
         : parsed.data.clearDestination
           ? null
           : existing.destination;
 
-    if (destination?.trim()) {
+    let normalizedDestination: string | null = rawDestination?.trim() || null;
+    if (normalizedDestination) {
       try {
-        validateDestination(parsed.data.deliveryMethod, destination);
+        normalizedDestination = validateTeamsChannelDestination(parsed.data.deliveryMethod, normalizedDestination);
       } catch (error) {
         return NextResponse.json(
           { error: error instanceof Error ? error.message : "Invalid destination" },
@@ -86,30 +74,33 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    if (parsed.data.enabled) {
-      if (!destination?.trim()) {
-        return NextResponse.json(
-          { error: "Add a channel email or webhook URL before enabling notifications." },
-          { status: 400 },
-        );
-      }
-      if (parsed.data.deliveryMethod === "email" && !isTeamStatusTeamsEmailDeliveryReady()) {
-        return NextResponse.json(
-          {
-            error:
-              "Email delivery is not configured on the server (RESEND_API_KEY and BILLING_FROM_EMAIL or TEAM_STATUS_FROM_EMAIL). Save the channel address now and enable after email is configured, or use webhook delivery.",
-          },
-          { status: 400 },
-        );
-      }
+    const warnings: string[] = [];
+    let enabledToSave = parsed.data.enabled;
+
+    if (enabledToSave && !normalizedDestination) {
+      return NextResponse.json(
+        { error: "Add a channel email or webhook URL before enabling notifications." },
+        { status: 400 },
+      );
+    }
+
+    if (
+      enabledToSave &&
+      parsed.data.deliveryMethod === "email" &&
+      !isTeamStatusTeamsEmailDeliveryReady()
+    ) {
+      enabledToSave = false;
+      warnings.push(
+        "Channel email was saved, but notifications were left off because email delivery is not configured on the server yet (Resend). Turn on Enable after Resend is ready, or use webhook delivery.",
+      );
     }
 
     await upsertTeamStatusTeamsChannelConfig({
       companyId: user.companyId,
-      enabled: parsed.data.enabled,
+      enabled: enabledToSave,
       deliveryMethod: parsed.data.deliveryMethod,
       channelLabel: parsed.data.channelLabel ?? null,
-      destination: destination?.trim() || null,
+      destination: normalizedDestination,
       clearDestination: Boolean(parsed.data.clearDestination),
     });
 
@@ -117,7 +108,11 @@ export async function PUT(request: NextRequest) {
     const { destination: _destination, ...publicConfig } = config;
     return NextResponse.json({
       ...publicConfig,
-      message: "Team status Teams channel settings saved.",
+      destinationConfigured: Boolean(config.destination?.trim()),
+      message: warnings.length
+        ? warnings.join(" ")
+        : "Team status Teams channel settings saved.",
+      warning: warnings[0] ?? null,
     });
   } catch (error) {
     console.error("[team-status-teams PUT]", error);

@@ -22,9 +22,11 @@ export type TeamStatusTeamsChannelConfig = {
 
 function maskDestination(value: string, method: TeamStatusTeamsDeliveryMethod) {
   if (method === "email") {
-    const [local, domain] = value.split("@");
-    if (!domain) return "••••••••";
-    const visible = local.slice(0, Math.min(2, local.length));
+    const at = value.lastIndexOf("@");
+    if (at <= 0) return "••••••••";
+    const local = value.slice(0, at);
+    const domain = value.slice(at + 1);
+    const visible = local.slice(0, Math.min(4, local.length));
     return `${visible}•••@${domain}`;
   }
   try {
