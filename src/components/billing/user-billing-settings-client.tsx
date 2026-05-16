@@ -4,7 +4,23 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  COUNTRY_OPTIONS,
+  OTHER_COUNTRY_OPTIONS,
+  PRIORITY_COUNTRY_OPTIONS,
+  US_STATE_OPTIONS,
+} from "@/lib/constants/geo-options";
 import { REQUIRED_USER_BILLING_FIELD_LABELS, type UserBillingProfileInput } from "@/lib/validation/billing";
+
+const selectClassName = "w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-sm text-zinc-200";
+
+function isKnownState(value: string) {
+  return US_STATE_OPTIONS.includes(value as (typeof US_STATE_OPTIONS)[number]);
+}
+
+function isKnownCountry(value: string) {
+  return COUNTRY_OPTIONS.includes(value as (typeof COUNTRY_OPTIONS)[number]);
+}
 
 const emptyProfile: UserBillingProfileInput = {
   firstName: "",
@@ -144,12 +160,22 @@ export function UserBillingSettingsClient() {
         </label>
         <label className="space-y-1 text-sm text-zinc-300">
           <RequiredLabel>State</RequiredLabel>
-          <input
+          <select
             required
             value={profile.state}
             onChange={(event) => updateField("state", event.target.value)}
-            className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-sm text-zinc-200"
-          />
+            className={selectClassName}
+          >
+            <option value="">Select state</option>
+            {profile.state && !isKnownState(profile.state) ? (
+              <option value={profile.state}>{profile.state} (update required)</option>
+            ) : null}
+            {US_STATE_OPTIONS.map((state) => (
+              <option key={state} value={state}>
+                {state}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="space-y-1 text-sm text-zinc-300">
           Province
@@ -170,12 +196,31 @@ export function UserBillingSettingsClient() {
         </label>
         <label className="space-y-1 text-sm text-zinc-300 sm:col-span-2">
           <RequiredLabel>Country</RequiredLabel>
-          <input
+          <select
             required
             value={profile.country}
             onChange={(event) => updateField("country", event.target.value)}
-            className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-sm text-zinc-200"
-          />
+            className={selectClassName}
+          >
+            <option value="">Select country</option>
+            {profile.country && !isKnownCountry(profile.country) ? (
+              <option value={profile.country}>{profile.country} (update required)</option>
+            ) : null}
+            <optgroup label="Common">
+              {PRIORITY_COUNTRY_OPTIONS.map((country) => (
+                <option key={country} value={country}>
+                  {country}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Other countries">
+              {OTHER_COUNTRY_OPTIONS.map((country) => (
+                <option key={country} value={country}>
+                  {country}
+                </option>
+              ))}
+            </optgroup>
+          </select>
         </label>
         <label className="space-y-1 text-sm text-zinc-300">
           <RequiredLabel>Phone</RequiredLabel>

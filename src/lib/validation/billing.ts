@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { COUNTRY_VALUE_SET, US_STATE_VALUE_SET } from "@/lib/constants/geo-options";
 
 export const BILLING_TIMEZONE = "America/New_York";
 export const BILLING_ALLOWED_EXTENSIONS = [".pdf", ".docx", ".xlsx", ".csv"] as const;
@@ -41,10 +42,18 @@ export const userBillingProfileSchema = z.object({
   address: z.string().trim().min(1, "Address is required.").max(255),
   address2: z.string().trim().max(255).optional().nullable(),
   city: z.string().trim().min(1, "City is required.").max(120),
-  state: z.string().trim().min(1, "State is required.").max(120),
+  state: z
+    .string()
+    .trim()
+    .min(1, "State is required.")
+    .refine((value) => US_STATE_VALUE_SET.has(value), { message: "Select a valid U.S. state." }),
   province: z.string().trim().max(120).optional().nullable(),
   zip: z.string().trim().min(1, "Zip is required.").max(32),
-  country: z.string().trim().min(1, "Country is required.").max(120),
+  country: z
+    .string()
+    .trim()
+    .min(1, "Country is required.")
+    .refine((value) => COUNTRY_VALUE_SET.has(value), { message: "Select a valid country." }),
   phone: z.string().trim().min(1, "Phone is required.").max(50),
   paypalAddress: z.string().trim().min(1, "PayPal address is required.").max(255),
 });
