@@ -1,7 +1,11 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { companySettings } from "@/lib/db/schema";
+import { isMissingIntegrationSchemaError } from "@/lib/integrations/schema-compat";
 import { decrypt, encrypt } from "@/lib/utils/crypto";
+
+export const TEAM_STATUS_TEAMS_SCHEMA_ERROR =
+  "Team status Teams settings require database migration 0014_team_status_teams_channel. Ask your platform administrator to apply it.";
 
 export type TeamStatusTeamsDeliveryMethod = "email" | "webhook";
 
@@ -36,18 +40,35 @@ function parseDeliveryMethod(value: string | null | undefined): TeamStatusTeamsD
 }
 
 export async function getTeamStatusTeamsChannelConfig(companyId: string): Promise<TeamStatusTeamsChannelConfig> {
-  const row = await db.query.companySettings.findFirst({
-    where: eq(companySettings.companyId, companyId),
-    columns: {
-      companyId: true,
-      teamStatusTeamsEnabled: true,
-      teamStatusTeamsDeliveryMethod: true,
-      teamStatusTeamsChannelLabel: true,
-      teamStatusTeamsDestinationEncrypted: true,
-      teamStatusTeamsLastTestedAt: true,
-      teamStatusTeamsLastError: true,
-    },
-  });
+  let row:
+    | {
+        teamStatusTeamsEnabled: boolean;
+        teamStatusTeamsDeliveryMethod: string | null;
+        teamStatusTeamsChannelLabel: string | null;
+        teamStatusTeamsDestinationEncrypted: string | null;
+        teamStatusTeamsLastTestedAt: Date | null;
+        teamStatusTeamsLastError: string | null;
+      }
+    | undefined;
+  try {
+    row = await db.query.companySettings.findFirst({
+      where: eq(companySettings.companyId, companyId),
+      columns: {
+        companyId: true,
+        teamStatusTeamsEnabled: true,
+        teamStatusTeamsDeliveryMethod: true,
+        teamStatusTeamsChannelLabel: true,
+        teamStatusTeamsDestinationEncrypted: true,
+        teamStatusTeamsLastTestedAt: true,
+        teamStatusTeamsLastError: true,
+      },
+    });
+  } catch (error) {
+    if (isMissingIntegrationSchemaError(error)) {
+      throw new Error(TEAM_STATUS_TEAMS_SCHEMA_ERROR);
+    }
+    throw error;
+  }
 
   const deliveryMethod = parseDeliveryMethod(row?.teamStatusTeamsDeliveryMethod);
   let destination: string | null = null;
@@ -99,10 +120,24 @@ export async function upsertTeamStatusTeamsChannelConfig(input: {
     teamStatusTeamsDestinationEncrypted: destinationEncrypted,
   };
 
-  if (existing) {
-    await db.update(companySettings).set(values).where(eq(companySettings.companyId, input.companyId));
-  } else {
-    await db.insert(companySettings).values(values);
+  try {
+    await db
+      .insert(companySettings)
+      .values(values)
+      .onConflictDoUpdate({
+        target: companySettings.companyId,
+        set: {
+          teamStatusTeamsEnabled: values.teamStatusTeamsEnabled,
+          teamStatusTeamsDeliveryMethod: values.teamStatusTeamsDeliveryMethod,
+          teamStatusTeamsChannelLabel: values.teamStatusTeamsChannelLabel,
+          teamStatusTeamsDestinationEncrypted: values.teamStatusTeamsDestinationEncrypted,
+        },
+      });
+  } catch (error) {
+    if (isMissingIntegrationSchemaError(error)) {
+      throw new Error(TEAM_STATUS_TEAMS_SCHEMA_ERROR);
+    }
+    throw error;
   }
 }
 

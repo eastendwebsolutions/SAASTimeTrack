@@ -74,7 +74,9 @@ export function TeamStatusTeamsSettingsPanel() {
         }),
       });
       const payload = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
-      if (!response.ok) throw new Error(payload.error ?? "Unable to save settings.");
+      if (!response.ok) {
+        throw new Error(payload.error ?? `Unable to save settings (${response.status}).`);
+      }
       setNotice(payload.message ?? "Settings saved.");
       setDestination("");
       await load();
@@ -182,8 +184,9 @@ export function TeamStatusTeamsSettingsPanel() {
 
         {deliveryMethod === "email" && !resendReady ? (
           <p className="text-sm text-amber-300">
-            Email delivery is not configured on the server yet (Resend / from address). Ask your platform admin or use
-            webhook delivery instead.
+            Email delivery is not configured on the server yet (Resend / from address). You can still{" "}
+            <strong>save</strong> your channel email below with notifications turned off, then enable after your
+            platform admin configures email—or switch to webhook delivery.
           </p>
         ) : null}
 
