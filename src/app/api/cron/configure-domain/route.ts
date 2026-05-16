@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 const PRODUCTION_ORIGINS = [
   "https://whosaas.com",
   "https://www.whosaas.com",
+  "https://whosaas.vercel.app",
   "https://saastimetrack.vercel.app",
 ];
 

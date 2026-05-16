@@ -63,7 +63,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   } catch {
     return adminReviewRedirect(request.url, {
       type: "error",
-      message: `Failed to update SAASTimeTrack access for ${target.email}.`,
+      message: `Failed to update WhoSaaS access for ${target.email}.`,
     });
   }
 
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       pageKey: "admin_review",
       entityType: "user_access",
       entityId: target.id,
-      fieldName: "SAASTimeTrack Access",
+      fieldName: "WhoSaaS Access",
       beforeValue: enabled ? "Revoked" : "Enabled",
       afterValue: enabled ? "Enabled" : "Revoked",
       metadataJson: { targetUserId: target.id, targetEmail: target.email, clerkUserId: target.clerkUserId },
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   return adminReviewRedirect(request.url, {
     type: "success",
     message: enabled
-      ? `Restored SAASTimeTrack access for ${target.email}.`
-      : `Revoked SAASTimeTrack access for ${target.email}.`,
+      ? `Restored WhoSaaS access for ${target.email}.`
+      : `Revoked WhoSaaS access for ${target.email}.`,
   });
 }

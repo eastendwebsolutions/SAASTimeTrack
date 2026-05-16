@@ -22,7 +22,7 @@ type Props = {
 };
 
 function getReminderKey(userId: string) {
-  return `saastimetrack:asana-sync-reminder:last-prompt:${userId}`;
+  return `whosaas:asana-sync-reminder:last-prompt:${userId}`;
 }
 
 function providerLabel(provider: Props["provider"]) {

@@ -58,7 +58,7 @@ function statusStyles(status: RosterMember["status"]) {
 }
 
 type AdminWorkspaceTeamSidebarProps = {
-  /** App user ids with revoked SAASTimeTrack access (from admin Users list). */
+  /** App user ids with revoked WhoSaaS access (from admin Users list). */
   revokedUserIds?: string[];
 };
 

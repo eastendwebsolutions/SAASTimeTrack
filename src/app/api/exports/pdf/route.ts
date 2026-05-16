@@ -16,7 +16,7 @@ export async function GET() {
   const page = pdf.addPage([612, 792]);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
 
-  page.drawText("SaaSTimeTrack Weekly Report", {
+  page.drawText("WhoSaaS Weekly Report", {
     x: 48,
     y: 740,
     size: 18,

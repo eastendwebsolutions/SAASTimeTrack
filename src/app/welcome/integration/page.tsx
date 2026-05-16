@@ -37,7 +37,7 @@ export default async function WelcomeIntegrationPage() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <header className="border-b border-zinc-800 px-6 py-4">
         <div className="mx-auto flex max-w-3xl items-center justify-between">
-          <span className="font-semibold text-indigo-300">SaaSTimeTrack</span>
+          <span className="font-semibold text-indigo-300">WhoSaaS</span>
           <UserButton />
         </div>
       </header>

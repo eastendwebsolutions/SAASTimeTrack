@@ -10,10 +10,10 @@ const HEARTBEAT_MS = 1000;
 const TIMER_DRAFT_STORAGE_KEY = "quick-entry-timer-draft:v1";
 
 function getUserActivityKey(userId: string) {
-  return `saastimetrack:last-activity:${userId}`;
+  return `whosaas:last-activity:${userId}`;
 }
 
-const CROSS_TAB_LOGOUT_KEY = "saastimetrack:force-logout-at";
+const CROSS_TAB_LOGOUT_KEY = "whosaas:force-logout-at";
 
 function hasActiveTimeEntryTimer() {
   try {

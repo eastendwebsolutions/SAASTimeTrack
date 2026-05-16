@@ -276,7 +276,7 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
 
     let hasProjectsProviderColumn = true;
 
-    // Drop stale cache from a previous Asana account / token (same SAASTimeTrack user).
+    // Drop stale cache from a previous Asana account / token (same WhoSaaS user).
     const staleProjectRows = await db
       .select({ id: projects.id })
       .from(projects)

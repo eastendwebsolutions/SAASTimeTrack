@@ -302,7 +302,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
         </p>
         <p className="mb-4 text-sm text-zinc-500">
           The Asana account used for sync is whichever account you <strong>approve in the Asana OAuth screen</strong> while signed into
-          SAASTimeTrack as this profile. It is tied to your SAASTimeTrack user id—not whichever account happens to be open in another
+          WhoSaaS as this profile. It is tied to your WhoSaaS user id—not whichever account happens to be open in another
           browser tab on asana.com.
         </p>
         {connection ? (
@@ -310,7 +310,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
             <p className="font-medium text-zinc-100">Identity check</p>
             <ul className="mt-2 list-inside list-disc space-y-1 text-zinc-400">
               <li>
-                <span className="text-zinc-500">SAASTimeTrack profile (this login):</span>{" "}
+                <span className="text-zinc-500">WhoSaaS profile (this login):</span>{" "}
                 <span className="text-zinc-100">{user.email}</span>
               </li>
               <li>
@@ -331,7 +331,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
             {asanaMe?.email &&
             user.email.toLowerCase().trim() !== asanaMe.email.toLowerCase().trim() ? (
               <p className="mt-2 text-xs text-amber-200/90">
-                These emails differ. Sync still runs only for <strong>this</strong> SAASTimeTrack user; the data is whatever that linked
+                These emails differ. Sync still runs only for <strong>this</strong> WhoSaaS user; the data is whatever that linked
                 Asana user can see. Use Reconnect if you meant to use the same email in both places.
               </p>
             ) : null}

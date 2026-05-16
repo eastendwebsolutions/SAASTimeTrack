@@ -57,7 +57,7 @@ async function sendEmailToChannel(channelEmail: string, message: string, channel
   await sendResendEmail({
     to: [channelEmail],
     cc: [],
-    subject: `SAASTimeTrack · ${label}`,
+    subject: `WhoSaaS · ${label}`,
     html: `<p style="font-family:sans-serif;font-size:14px;line-height:1.5">${message.replace(/\n/g, "<br/>")}</p>`,
     attachments: [],
     from,
@@ -122,7 +122,7 @@ export async function sendTeamStatusTeamsChannelTest(companyId: string) {
   if (!config.destination?.trim()) {
     return { ok: false as const, error: "Add a channel email or webhook URL before sending a test." };
   }
-  const message = `SAASTimeTrack test: Team status notifications are configured for this company.\n${new Date().toLocaleString("en-US", { timeZone: "America/New_York", timeZoneName: "short" })}`;
+  const message = `WhoSaaS test: Team status notifications are configured for this company.\n${new Date().toLocaleString("en-US", { timeZone: "America/New_York", timeZoneName: "short" })}`;
 
   try {
     await deliverTeamStatusTeamsChannelMessage({ ...config, enabled: true }, message);

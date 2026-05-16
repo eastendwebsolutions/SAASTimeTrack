@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { WhoSaaSLogo } from "@/components/brand/whosaas-logo";
 import { Button } from "@/components/ui/button";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 
@@ -15,7 +16,7 @@ export default async function Home() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col justify-center gap-6 px-6">
-      <p className="text-sm text-indigo-300">SaaSTimeTrack MVP</p>
+      <WhoSaaSLogo className="text-base" />
       <h1 className="text-4xl font-semibold">Log time once. Connect everywhere.</h1>
       <p className="max-w-2xl text-zinc-400">
         Asana-first time tracking with weekly timesheets, per-entry approval, and exportable reports.

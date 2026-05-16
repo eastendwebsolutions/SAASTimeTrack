@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
+import { WhoSaaSLogo } from "@/components/brand/whosaas-logo";
 import { AsanaHeaderStatus } from "@/components/integrations/asana-header-status";
 import { TeamStatusHeaderIndicator } from "@/components/team-status/header-indicator";
 import { NavDropdown } from "@/components/layout/nav-dropdown";
@@ -44,8 +45,8 @@ export function AppHeader({
   return (
     <header className="sticky top-0 z-40 border-b border-zinc-800/90 bg-zinc-950/95 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:gap-4 sm:px-6">
-        <Link href={appHomeHref} className="shrink-0 text-sm font-semibold tracking-tight text-indigo-300 sm:text-base">
-          SaaSTimeTrack
+        <Link href={appHomeHref} className="shrink-0 sm:text-base">
+          <WhoSaaSLogo size="sm" className="text-sm" />
         </Link>
 
         <nav className="hidden min-w-0 flex-1 items-center gap-0.5 md:flex" aria-label="Main">

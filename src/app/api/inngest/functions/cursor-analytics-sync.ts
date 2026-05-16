@@ -12,7 +12,7 @@ import { inngest } from "./client";
 
 /**
  * Best-effort sync from Cursor Team Analytics API when a company has stored credentials.
- * Normalizes into cursor_usage_daily (per Cursor user; mapped to SaaSTimeTrack users when identities exist).
+ * Normalizes into cursor_usage_daily (per Cursor user; mapped to WhoSaaS users when identities exist).
  */
 export const cursorAnalyticsSync = inngest.createFunction(
   { id: "cursor-analytics-sync", triggers: [{ cron: "45 6 * * *" }] },
@@ -165,7 +165,7 @@ async function fetchCursorUsageAggregate(
   /** Without user UUID mapping, return empty (identities required for internal user ids). */
   if (map.size === 0) return null;
 
-  /** Resolve internal SaaSTimeTrack user IDs via cursor identities stored with matching external id. */
+  /** Resolve internal WhoSaaS user IDs via cursor identities stored with matching external id. */
   const internalMap = new Map<string, CursorAgg>();
   const identities = await db.query.cursorUserIdentities.findMany({
     where: eq(cursorUserIdentities.companyId, companyId),

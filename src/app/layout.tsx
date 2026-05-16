@@ -8,8 +8,8 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "SaaSTimeTrack",
-  description: "Asana-first SaaS time tracking",
+  title: "WhoSaaS",
+  description: "Asana-first SaaS time tracking for your team",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

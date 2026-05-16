@@ -1,4 +1,4 @@
-# SAASTimeTrack
+# WhoSaaS
 
 Asana-first multi-tenant time tracking MVP built with Next.js, Clerk, Drizzle, and PostgreSQL.
 
@@ -110,7 +110,7 @@ DATABASE_URL="postgresql://..." npm run db:push
 
 ```bash
 npx vercel login
-npx vercel link --project saastimetrack   # or your project name
+npx vercel link --project whosaas   # or your project name
 npx vercel env pull .env.vercel.local     # optional: sync env to file
 npx vercel --prod
 ```
