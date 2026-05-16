@@ -45,8 +45,8 @@ export function AppHeader({
   return (
     <header className="sticky top-0 z-40 border-b border-zinc-800/90 bg-zinc-950/95 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:gap-4 sm:px-6">
-        <Link href={appHomeHref} className="shrink-0 sm:text-base">
-          <WhoSaaSLogo size="sm" className="text-sm" />
+        <Link href={appHomeHref} className="shrink-0">
+          <WhoSaaSLogo size="lg" />
         </Link>
 
         <nav className="hidden min-w-0 flex-1 items-center gap-0.5 md:flex" aria-label="Main">
