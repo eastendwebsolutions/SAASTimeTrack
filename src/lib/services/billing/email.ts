@@ -1,6 +1,7 @@
 import { sendResendEmail } from "@/lib/services/email/resend";
 import type { InvoiceLineItem, UserBillingSnapshot } from "@/lib/validation/billing";
 import { buildInvoiceHtml } from "./invoice";
+import { buildInvoicePdf, invoicePdfFilename } from "./invoice-pdf";
 import { formatSubmittedAtEasternLabel, getBillingPeriodLabel } from "./period";
 
 export async function sendBillingSubmissionEmail({
@@ -36,16 +37,29 @@ export async function sendBillingSubmissionEmail({
 }) {
   const billingPeriod = getBillingPeriodLabel(periodStart, periodEnd);
   const submittedLabel = formatSubmittedAtEasternLabel(submittedAt);
+  const snapshot = {
+    ...billingSnapshot,
+    userDisplayName: userName,
+    userEmail,
+  };
+
   const html = buildInvoiceHtml({
     invoiceNumber,
     periodLabel: billingPeriod,
     submittedLabel,
     companyName,
-    billingSnapshot: {
-      ...billingSnapshot,
-      userDisplayName: userName,
-      userEmail,
-    },
+    billingSnapshot: snapshot,
+    lineItems,
+    userBody,
+    defaultFooter,
+  });
+
+  const pdf = await buildInvoicePdf({
+    invoiceNumber,
+    periodLabel: billingPeriod,
+    submittedLabel,
+    companyName,
+    billingSnapshot: snapshot,
     lineItems,
     userBody,
     defaultFooter,
@@ -56,6 +70,12 @@ export async function sendBillingSubmissionEmail({
     cc,
     subject,
     html,
-    attachments: [],
+    attachments: [
+      {
+        filename: invoicePdfFilename(invoiceNumber),
+        content: pdf,
+        contentType: "application/pdf",
+      },
+    ],
   });
 }
