@@ -15,5 +15,12 @@ export async function POST() {
     return NextResponse.json({ error: result.error }, { status: 502 });
   }
 
-  return NextResponse.json({ ok: true, message: "Test message sent to your Teams channel." });
+  return NextResponse.json({
+    ok: true,
+    message: "Test message accepted by the delivery provider.",
+    deliveryMethod: result.deliveryMethod,
+    destinationHint: result.destinationHint,
+    providerMessageId: result.providerMessageId,
+    teamsNote: result.teamsNote,
+  });
 }

@@ -26,16 +26,32 @@ function buildTeamsMessage(input: {
 }
 
 async function postWebhook(url: string, message: string) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: message }),
-    cache: "no-store",
-  });
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(`Teams webhook failed (${response.status})${body ? `: ${body.slice(0, 200)}` : ""}`);
+  const payloads: unknown[] = [
+    { text: message },
+    {
+      "@type": "MessageCard",
+      "@context": "https://schema.org/extensions",
+      summary: "WhoSaaS Team Status",
+      themeColor: "5B5BD6",
+      text: message.replace(/\n/g, "<br>"),
+    },
+  ];
+
+  let lastError: Error | null = null;
+  for (const body of payloads) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+    if (response.ok) return;
+    const responseBody = await response.text().catch(() => "");
+    lastError = new Error(
+      `Teams webhook failed (${response.status})${responseBody ? `: ${responseBody.slice(0, 200)}` : ""}`,
+    );
   }
+  throw lastError ?? new Error("Teams webhook failed.");
 }
 
 async function sendEmailToChannel(channelEmail: string, message: string, channelLabel: string | null) {
@@ -46,32 +62,60 @@ async function sendEmailToChannel(channelEmail: string, message: string, channel
   }
 
   const label = channelLabel?.trim() || "Team Member Status";
-  await sendResendEmail({
+  const messageId = await sendResendEmail({
     to: [channelEmail],
     cc: [],
-    subject: `WhoSaaS · ${label}`,
+    subject: label,
     html: `<p style="font-family:sans-serif;font-size:14px;line-height:1.5">${message.replace(/\n/g, "<br/>")}</p>`,
+    text: message,
     attachments: [],
     from,
+    fromDisplayName: "WhoSaaS Team Status",
   });
+
+  console.info("[teams-channel] Resend accepted email", {
+    toDomain: channelEmail.split("@")[1] ?? "unknown",
+    messageId,
+  });
+
+  return messageId;
 }
+
+export type TeamsChannelDeliveryResult =
+  | { skipped: true; reason: string }
+  | {
+      skipped: false;
+      deliveryMethod: "email" | "webhook";
+      destinationHint: string | null;
+      providerMessageId: string | null;
+    };
 
 export async function deliverTeamStatusTeamsChannelMessage(
   config: TeamStatusTeamsChannelConfig,
   message: string,
-) {
-  if (!config.enabled) return { skipped: true as const, reason: "disabled" };
+): Promise<TeamsChannelDeliveryResult> {
+  if (!config.enabled) return { skipped: true, reason: "disabled" };
   if (!config.destination?.trim()) {
     throw new Error("Teams channel destination is not configured.");
   }
 
   if (config.deliveryMethod === "webhook") {
     await postWebhook(config.destination.trim(), message);
-  } else {
-    await sendEmailToChannel(config.destination.trim(), message, config.channelLabel);
+    return {
+      skipped: false,
+      deliveryMethod: "webhook",
+      destinationHint: config.destinationHint,
+      providerMessageId: null,
+    };
   }
 
-  return { skipped: false as const };
+  const providerMessageId = await sendEmailToChannel(config.destination.trim(), message, config.channelLabel);
+  return {
+    skipped: false,
+    deliveryMethod: "email",
+    destinationHint: config.destinationHint,
+    providerMessageId,
+  };
 }
 
 export async function notifyTeamStatusTeamsChannel(input: {
@@ -119,6 +163,9 @@ export async function notifyTeamStatusTeamsChannel(input: {
   }
 }
 
+export const TEAMS_EMAIL_DELIVERY_NOTE =
+  "Resend accepted the message. If nothing appears in Teams Posts, open the channel → ⋯ → Get email address and confirm “Anyone can send emails to this address” is on. Your Microsoft 365 admin may also need to allow external senders to Teams channel addresses (whosaas.com). Check the Resend dashboard for bounces. If email stays blocked, switch Delivery method to Workflow webhook.";
+
 export async function sendTeamStatusTeamsChannelTest(companyId: string) {
   const config = await getTeamStatusTeamsChannelConfig(companyId);
   if (!config.destination?.trim()) {
@@ -127,9 +174,18 @@ export async function sendTeamStatusTeamsChannelTest(companyId: string) {
   const message = `WhoSaaS test: Team status notifications are configured for this company.\n${new Date().toLocaleString("en-US", { timeZone: "America/New_York", timeZoneName: "short" })}`;
 
   try {
-    await deliverTeamStatusTeamsChannelMessage({ ...config, enabled: true }, message);
+    const delivery = await deliverTeamStatusTeamsChannelMessage({ ...config, enabled: true }, message);
+    if (delivery.skipped) {
+      return { ok: false as const, error: `Delivery skipped: ${delivery.reason}` };
+    }
     await recordTeamStatusTeamsChannelResult(companyId, null);
-    return { ok: true as const };
+    return {
+      ok: true as const,
+      deliveryMethod: delivery.deliveryMethod,
+      destinationHint: delivery.destinationHint,
+      providerMessageId: delivery.providerMessageId,
+      teamsNote: delivery.deliveryMethod === "email" ? TEAMS_EMAIL_DELIVERY_NOTE : null,
+    };
   } catch (error) {
     const errMessage = error instanceof Error ? error.message : "Test delivery failed";
     await recordTeamStatusTeamsChannelResult(companyId, errMessage);

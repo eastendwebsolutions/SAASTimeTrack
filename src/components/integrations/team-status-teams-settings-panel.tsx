@@ -93,9 +93,22 @@ export function TeamStatusTeamsSettingsPanel() {
     setError(null);
     try {
       const response = await fetch("/api/integrations/team-status-teams/test", { method: "POST" });
-      const payload = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+        deliveryMethod?: string;
+        destinationHint?: string | null;
+        providerMessageId?: string | null;
+        teamsNote?: string | null;
+      };
       if (!response.ok) throw new Error(payload.error ?? "Test failed.");
-      setNotice(payload.message ?? "Test sent.");
+      const parts = [
+        payload.message ?? "Test sent.",
+        payload.destinationHint ? `Destination: ${payload.destinationHint}` : null,
+        payload.providerMessageId ? `Resend id: ${payload.providerMessageId}` : null,
+        payload.teamsNote ?? null,
+      ].filter(Boolean);
+      setNotice(parts.join(" "));
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Test failed.");
@@ -177,8 +190,15 @@ export function TeamStatusTeamsSettingsPanel() {
           <ol className="mt-2 list-inside list-decimal space-y-1.5 pl-1">
             <li>In Microsoft Teams, open your channel (e.g. &quot;Team Member Status&quot;).</li>
             <li>Select <strong>⋯</strong> → <strong>Get email address</strong> (or Connectors → Email).</li>
-            <li>Paste that address above and send a test message.</li>
-            <li>Your IT admin may need to allow email to channels for your tenant once.</li>
+            <li>
+              In the dialog, turn on <strong>Anyone can send emails to this address</strong> (inside and outside your org).
+              Without this, messages from WhoSaaS (whosaas.com) are dropped by Microsoft even when our test succeeds.
+            </li>
+            <li>Paste that address above, save, then send a test message.</li>
+            <li>
+              If the test succeeds here but Posts stay empty, ask IT to allow external senders to Teams channel addresses, or
+              switch <strong>Delivery method</strong> to <strong>Workflow webhook</strong> (Power Automate → Post message in a chat or channel).
+            </li>
           </ol>
         </details>
 
