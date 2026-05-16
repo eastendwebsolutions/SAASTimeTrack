@@ -13,6 +13,8 @@ import { IntegrationLabel } from "@/components/integrations/integration-label";
 import { getMondayReadiness } from "@/lib/integrations/monday-readiness";
 import { getActiveProviderForUser } from "@/lib/integrations/provider";
 import { isMissingIntegrationSchemaError } from "@/lib/integrations/schema-compat";
+import { canManageCompanySettings } from "@/lib/auth/rbac";
+import { TeamStatusTeamsSettingsPanel } from "@/components/integrations/team-status-teams-settings-panel";
 
 const ASANA_ERROR_MESSAGES: Record<string, string> = {
   missing_params: "Asana did not return a complete authorization response. Use Connect Asana again.",
@@ -170,10 +172,12 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
     : null;
 
   const integrationOptional = !requiresPersonalIntegration(user.role);
+  const canManageTeamsChannel = canManageCompanySettings(user.role);
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Integrations</h1>
+      {canManageTeamsChannel ? <TeamStatusTeamsSettingsPanel /> : null}
       {integrationOptional ? (
         <Card className="border border-indigo-500/30 bg-indigo-950/20 p-4 text-sm text-indigo-100">
           <p className="font-medium text-indigo-50">Super admin: integration is optional</p>

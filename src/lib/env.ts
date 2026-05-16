@@ -19,6 +19,7 @@ const envSchema = z.object({
   ENCRYPTION_KEY: z.string().min(32),
   RESEND_API_KEY: z.string().optional(),
   BILLING_FROM_EMAIL: z.email().optional(),
+  TEAM_STATUS_FROM_EMAIL: z.email().optional(),
   BILLING_MAX_FILE_SIZE_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024),
 });
 
@@ -49,6 +50,7 @@ export function getEnv(): Env {
     ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     BILLING_FROM_EMAIL: process.env.BILLING_FROM_EMAIL,
+    TEAM_STATUS_FROM_EMAIL: process.env.TEAM_STATUS_FROM_EMAIL,
     BILLING_MAX_FILE_SIZE_BYTES: process.env.BILLING_MAX_FILE_SIZE_BYTES,
   });
 

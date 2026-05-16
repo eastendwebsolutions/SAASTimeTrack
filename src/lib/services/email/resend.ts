@@ -13,21 +13,24 @@ export async function sendResendEmail({
   subject,
   html,
   attachments,
+  from,
 }: {
   to: string[];
   cc: string[];
   subject: string;
   html: string;
   attachments: ResendAttachment[];
+  from?: string;
 }) {
   const env = getEnv();
-  if (!env.RESEND_API_KEY || !env.BILLING_FROM_EMAIL) {
-    throw new Error("Missing RESEND_API_KEY or BILLING_FROM_EMAIL");
+  const fromAddress = from ?? env.BILLING_FROM_EMAIL;
+  if (!env.RESEND_API_KEY || !fromAddress) {
+    throw new Error("Missing RESEND_API_KEY or outbound from email");
   }
 
   const resend = new Resend(env.RESEND_API_KEY);
   const result = await resend.emails.send({
-    from: env.BILLING_FROM_EMAIL,
+    from: fromAddress,
     to,
     cc,
     subject,

@@ -57,6 +57,12 @@ export const companySettings = pgTable("company_settings", {
   asanaSprintFieldName: varchar("asana_sprint_field_name", { length: 255 }),
   asanaStoryPointsFieldGid: varchar("asana_story_points_field_gid", { length: 100 }),
   asanaStoryPointsFieldName: varchar("asana_story_points_field_name", { length: 255 }),
+  teamStatusTeamsEnabled: boolean("team_status_teams_enabled").notNull().default(false),
+  teamStatusTeamsDeliveryMethod: varchar("team_status_teams_delivery_method", { length: 20 }).notNull().default("email"),
+  teamStatusTeamsChannelLabel: varchar("team_status_teams_channel_label", { length: 255 }),
+  teamStatusTeamsDestinationEncrypted: text("team_status_teams_destination_encrypted"),
+  teamStatusTeamsLastTestedAt: timestamp("team_status_teams_last_tested_at", { withTimezone: true }),
+  teamStatusTeamsLastError: text("team_status_teams_last_error"),
   ...timestamps,
 });
 

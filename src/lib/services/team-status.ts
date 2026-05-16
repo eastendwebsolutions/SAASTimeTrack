@@ -4,6 +4,7 @@ import { companies, teamStatusEvents, users } from "@/lib/db/schema";
 import type { Role } from "@/lib/auth/rbac";
 import { resolveWorkspaceCompanyIdsForCompanyAdmin } from "@/lib/services/admin-workspace-scope";
 import { getClerkDisplayNames } from "@/lib/services/clerk-admin";
+import { notifyTeamStatusTeamsChannel } from "@/lib/services/team-status/teams-channel-notify";
 import { buildWorkspaceOptions, resolveWorkspaceScopedCompanyIdsForSuperAdmin } from "@/lib/services/workspace-options";
 
 export const TEAM_STATUS_TIMEZONE = "America/New_York";
@@ -301,6 +302,16 @@ export async function createTeamStatusEvent(params: {
     .returning();
 
   const updated = await getUserCurrentStatus(params.userId, localDateKey);
+
+  void notifyTeamStatusTeamsChannel({
+    companyId: params.companyId,
+    userId: params.userId,
+    eventType: params.eventType,
+    eventTimeLabel: formatEasternTimestamp(now),
+  }).catch(() => {
+    // Delivery errors are recorded on company_settings; do not fail the status action.
+  });
+
   return {
     ok: true as const,
     event: inserted,
