@@ -7,20 +7,12 @@ import {
   eventMessageFor,
   type TeamStatusEventType,
 } from "@/lib/services/team-status";
+import { resolveUserDisplayName } from "@/lib/services/user-display-name";
 import {
   getTeamStatusTeamsChannelConfig,
   recordTeamStatusTeamsChannelResult,
   type TeamStatusTeamsChannelConfig,
 } from "@/lib/services/team-status/teams-channel-config";
-
-function displayNameFromEmail(email: string) {
-  const raw = email.split("@")[0] ?? email;
-  return raw
-    .split(/[._-]+/g)
-    .filter(Boolean)
-    .map((token) => `${token.charAt(0).toUpperCase()}${token.slice(1)}`)
-    .join(" ");
-}
 
 function buildTeamsMessage(input: {
   displayName: string;
@@ -89,7 +81,14 @@ export async function notifyTeamStatusTeamsChannel(input: {
   eventTimeLabel: string;
 }) {
   const config = await getTeamStatusTeamsChannelConfig(input.companyId);
-  if (!config.enabled || !config.destination) {
+  if (!config.enabled) {
+    return;
+  }
+  if (!config.destination?.trim()) {
+    await recordTeamStatusTeamsChannelResult(
+      input.companyId,
+      "Teams channel is enabled but no destination email or webhook is saved.",
+    );
     return;
   }
 
@@ -99,7 +98,10 @@ export async function notifyTeamStatusTeamsChannel(input: {
   });
   if (!user) return;
 
-  const displayName = user.displayName?.trim() || displayNameFromEmail(user.email);
+  const displayName = resolveUserDisplayName({
+    email: user.email,
+    dbDisplayName: user.displayName,
+  });
   const message = buildTeamsMessage({
     displayName,
     eventType: input.eventType,

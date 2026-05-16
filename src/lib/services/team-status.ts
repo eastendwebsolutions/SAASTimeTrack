@@ -5,6 +5,10 @@ import type { Role } from "@/lib/auth/rbac";
 import { resolveWorkspaceCompanyIdsForCompanyAdmin } from "@/lib/services/admin-workspace-scope";
 import { getClerkDisplayNames } from "@/lib/services/clerk-admin";
 import { notifyTeamStatusTeamsChannel } from "@/lib/services/team-status/teams-channel-notify";
+import {
+  initialsFromDisplayName,
+  resolveUserDisplayName,
+} from "@/lib/services/user-display-name";
 import { buildWorkspaceOptions, resolveWorkspaceScopedCompanyIdsForSuperAdmin } from "@/lib/services/workspace-options";
 
 export const TEAM_STATUS_TIMEZONE = "America/New_York";
@@ -118,20 +122,6 @@ export function eventMessageFor(type: TeamStatusEventType, userDisplayName: stri
   if (type === "DAY_OUT") return `${userDisplayName} has ENDED WORK for the day!`;
   if (type === "BREAK_IN") return `${userDisplayName} has started their BREAK!`;
   return `${userDisplayName} has ended their BREAK!`;
-}
-
-function displayNameFromEmail(email: string) {
-  const raw = email.split("@")[0] ?? email;
-  return raw
-    .split(/[._-]+/g)
-    .filter(Boolean)
-    .map((token) => `${token.charAt(0).toUpperCase()}${token.slice(1)}`)
-    .join(" ");
-}
-
-function initialsFromName(name: string) {
-  const parts = name.split(" ").filter(Boolean);
-  return (parts[0]?.[0] ?? "").concat(parts[1]?.[0] ?? "").toUpperCase() || "U";
 }
 
 export function evaluateDayStatus(events: TeamStatusEventRow[], now = new Date()): TeamStatusEvaluation {
@@ -308,8 +298,9 @@ export async function createTeamStatusEvent(params: {
     userId: params.userId,
     eventType: params.eventType,
     eventTimeLabel: formatEasternTimestamp(now),
-  }).catch(() => {
+  }).catch((error) => {
     // Delivery errors are recorded on company_settings; do not fail the status action.
+    console.error("[team-status] Teams channel delivery failed:", error);
   });
 
   return {
@@ -376,6 +367,7 @@ export async function listTeamStatusFeed(params: {
       user: {
         id: users.id,
         email: users.email,
+        displayName: users.displayName,
         clerkUserId: users.clerkUserId,
       },
     })
@@ -391,15 +383,24 @@ export async function listTeamStatusFeed(params: {
       : rows;
 
   const clerkNameMap = await getClerkDisplayNames(filteredRows.map((row) => row.user.clerkUserId));
+
+  function nameForRow(row: (typeof filteredRows)[number]) {
+    return resolveUserDisplayName({
+      email: row.user.email,
+      dbDisplayName: row.user.displayName,
+      clerkDisplayName: clerkNameMap.get(row.user.clerkUserId),
+    });
+  }
+
   const userMap = new Map<string, { id: string; email: string; displayName: string; initials: string }>();
   for (const row of filteredRows) {
-    const displayName = clerkNameMap.get(row.user.clerkUserId) ?? displayNameFromEmail(row.user.email);
+    const displayName = nameForRow(row);
     if (!userMap.has(row.user.id)) {
       userMap.set(row.user.id, {
         id: row.user.id,
         email: row.user.email,
         displayName,
-        initials: initialsFromName(displayName),
+        initials: initialsFromDisplayName(displayName),
       });
     }
   }
@@ -424,12 +425,9 @@ export async function listTeamStatusFeed(params: {
       eventTimestampUtc: new Date(row.event.eventTimestampUtc).toISOString(),
       eventTimestampLocalLabel: formatEasternTimestamp(new Date(row.event.eventTimestampUtc)),
       eventLocalDate: toNyDateKey(new Date(row.event.eventTimestampUtc)),
-      message: eventMessageFor(
-        row.event.eventType as TeamStatusEventType,
-        clerkNameMap.get(row.user.clerkUserId) ?? displayNameFromEmail(row.user.email),
-      ),
-      userDisplayName: clerkNameMap.get(row.user.clerkUserId) ?? displayNameFromEmail(row.user.email),
-      userInitials: initialsFromName(clerkNameMap.get(row.user.clerkUserId) ?? displayNameFromEmail(row.user.email)),
+      message: eventMessageFor(row.event.eventType as TeamStatusEventType, nameForRow(row)),
+      userDisplayName: nameForRow(row),
+      userInitials: initialsFromDisplayName(nameForRow(row)),
     })),
     users: Array.from(userMap.values()).sort((a, b) => a.displayName.localeCompare(b.displayName)),
     companies: workspaceOptions,

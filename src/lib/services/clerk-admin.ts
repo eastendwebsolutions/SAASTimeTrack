@@ -1,4 +1,5 @@
 import { getEnv } from "@/lib/env";
+import { looksLikeClerkOpaqueId } from "@/lib/services/user-display-name";
 
 type ClerkUserPayload = {
   id: string;
@@ -81,9 +82,10 @@ export async function setClerkAccessEnabled(clerkUserId: string, enabled: boolea
   await clerkApi(`/users/${clerkUserId}/${enabled ? "unban" : "ban"}`, { method: "POST" });
 }
 
-function fallbackNameFromUsernameOrId(username: string | null | undefined, clerkUserId: string) {
-  if (username && username.trim()) return username.trim();
-  return clerkUserId;
+function fallbackNameFromUsername(username: string | null | undefined) {
+  const trimmed = username?.trim();
+  if (!trimmed || looksLikeClerkOpaqueId(trimmed)) return "";
+  return trimmed;
 }
 
 export type ClerkUserBasics = {
@@ -99,7 +101,7 @@ export async function getClerkUserBasics(clerkUserIds: string[]) {
       const fullName = [payload.first_name, payload.last_name].filter(Boolean).join(" ").trim();
       return {
         clerkUserId,
-        displayName: fullName || fallbackNameFromUsernameOrId(payload.username, clerkUserId),
+        displayName: fullName || fallbackNameFromUsername(payload.username),
         isAccessRevoked: Boolean(payload.banned),
       };
     }),
@@ -107,7 +109,7 @@ export async function getClerkUserBasics(clerkUserIds: string[]) {
 
   const basicsMap = new Map<string, ClerkUserBasics>();
   for (const result of results) {
-    if (result.status === "fulfilled") {
+    if (result.status === "fulfilled" && result.value.displayName.trim()) {
       basicsMap.set(result.value.clerkUserId, {
         displayName: result.value.displayName,
         isAccessRevoked: result.value.isAccessRevoked,
