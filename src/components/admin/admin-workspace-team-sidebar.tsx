@@ -57,7 +57,12 @@ function statusStyles(status: RosterMember["status"]) {
   return "border-zinc-600 bg-zinc-800/60 text-zinc-300";
 }
 
-export function AdminWorkspaceTeamSidebar() {
+type AdminWorkspaceTeamSidebarProps = {
+  /** App user ids with revoked SAASTimeTrack access (from admin Users list). */
+  revokedUserIds?: string[];
+};
+
+export function AdminWorkspaceTeamSidebar({ revokedUserIds = [] }: AdminWorkspaceTeamSidebarProps) {
   const [roster, setRoster] = useState<RosterPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +94,11 @@ export function AdminWorkspaceTeamSidebar() {
     };
   }, [loadRoster]);
 
-  const members = roster?.members ?? [];
+  const revokedIdSet = useMemo(() => new Set(revokedUserIds), [revokedUserIds]);
+  const members = useMemo(
+    () => (roster?.members ?? []).filter((member) => !revokedIdSet.has(member.userId)),
+    [revokedIdSet, roster?.members],
+  );
   const workingCount = useMemo(() => members.filter((member) => member.status === "Working").length, [members]);
 
   return (

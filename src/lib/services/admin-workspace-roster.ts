@@ -3,7 +3,6 @@ import { canReviewEntries } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
 import { teamStatusEvents, timeEntries, users } from "@/lib/db/schema";
 import { resolveWorkspaceCompanyIdsForCompanyAdmin, type AdminWorkspaceActor } from "@/lib/services/admin-workspace-scope";
-import { getClerkUserBasics } from "@/lib/services/clerk-admin";
 import {
   evaluateDayStatus,
   getNowInNy,
@@ -54,6 +53,16 @@ export async function getWorkspaceRosterForCompanyAdmin(actor: AdminWorkspaceAct
   }
 
   const companyIds = await resolveWorkspaceCompanyIdsForCompanyAdmin(actor.companyId);
+  if (companyIds.length === 0) {
+    const todayKey = getNowInNy().dateKey;
+    return {
+      dateKey: todayKey,
+      timezone: TEAM_STATUS_TIMEZONE,
+      memberCount: 0,
+      members: [],
+    };
+  }
+
   const todayKey = getNowInNy().dateKey;
   const todayStart = nyDateKeyToTimestamp(todayKey);
   const tomorrowStart = new Date(todayStart);
@@ -61,7 +70,7 @@ export async function getWorkspaceRosterForCompanyAdmin(actor: AdminWorkspaceAct
 
   const workspaceUsers = await db.query.users.findMany({
     where: inArray(users.companyId, companyIds),
-    columns: { id: true, email: true, clerkUserId: true, role: true },
+    columns: { id: true, email: true, displayName: true, role: true },
     orderBy: (table, { asc: ascCol }) => [ascCol(table.email)],
   });
 
@@ -94,18 +103,10 @@ export async function getWorkspaceRosterForCompanyAdmin(actor: AdminWorkspaceAct
   }
 
   const loggedByUser = new Map(loggedRows.map((row) => [row.userId, row.totalMinutes]));
-  const clerkBasicsMap = await getClerkUserBasics(workspaceUsers.map((row) => row.clerkUserId));
   const now = new Date();
 
-  const activeWorkspaceUsers = workspaceUsers.filter((row) => {
-    const basics = clerkBasicsMap.get(row.clerkUserId);
-    if (!basics) return true;
-    return !basics.isAccessRevoked;
-  });
-
-  const members: WorkspaceRosterMember[] = activeWorkspaceUsers.map((row) => {
-    const basics = clerkBasicsMap.get(row.clerkUserId);
-    const displayName = basics?.displayName ?? displayNameFromEmail(row.email);
+  const members: WorkspaceRosterMember[] = workspaceUsers.map((row) => {
+    const displayName = row.displayName?.trim() || displayNameFromEmail(row.email);
     const evaluation = evaluateDayStatus(eventsByUser.get(row.id) ?? [], now);
     return {
       userId: row.id,

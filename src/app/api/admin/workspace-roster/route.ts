@@ -20,6 +20,7 @@ export async function GET() {
     });
     return NextResponse.json(roster);
   } catch (error) {
+    console.error("[workspace-roster]", error);
     const message = error instanceof Error ? error.message : "Unable to load workspace roster";
     return NextResponse.json({ error: message }, { status: 500 });
   }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { adminUserPermissionsRowClassName } from "@/components/admin/admin-user-row-styles";
@@ -81,6 +82,10 @@ export function CompanyAdminReviewPanel({
   audit,
 }: Props) {
   const auditQuery = { tab: "audit" };
+  const revokedUserIds = useMemo(
+    () => companyUsers.filter((user) => user.isAccessRevoked).map((user) => user.id),
+    [companyUsers],
+  );
 
   return (
     <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
@@ -292,7 +297,7 @@ export function CompanyAdminReviewPanel({
         />
       </div>
       <aside className="w-full shrink-0 xl:w-[22rem] xl:sticky xl:top-6 xl:self-start">
-        <AdminWorkspaceTeamSidebar />
+        <AdminWorkspaceTeamSidebar revokedUserIds={revokedUserIds} />
       </aside>
     </div>
   );
