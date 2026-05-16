@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AdminReviewTabs } from "@/components/admin/admin-review-tabs";
+import { AdminWorkspaceTeamSidebar } from "@/components/admin/admin-workspace-team-sidebar";
 import { AuditTrailTable } from "@/components/audit/audit-trail-table";
 
 type CompanyUserRow = {
@@ -81,7 +82,9 @@ export function CompanyAdminReviewPanel({
   const auditQuery = { tab: "audit" };
 
   return (
-    <AdminReviewTabs
+    <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
+      <div className="min-w-0 flex-1">
+        <AdminReviewTabs
       title="Admin Review"
       defaultTab="users"
       tabs={[
@@ -285,6 +288,11 @@ export function CompanyAdminReviewPanel({
           />
         ),
       }}
-    />
+        />
+      </div>
+      <aside className="w-full shrink-0 xl:w-[22rem] xl:sticky xl:top-6 xl:self-start">
+        <AdminWorkspaceTeamSidebar />
+      </aside>
+    </div>
   );
 }
