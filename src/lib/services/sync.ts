@@ -1,6 +1,7 @@
 import { sql as vercelSql } from "@vercel/postgres";
 import { and, eq, inArray } from "drizzle-orm";
-import { asanaFetch, refreshAsanaAccessToken } from "@/lib/asana/client";
+import { refreshAndPersistAsanaConnection } from "@/lib/asana/connection-tokens";
+import { asanaFetch } from "@/lib/asana/client";
 import { db } from "@/lib/db";
 import { asanaConnections, companies, jiraConnections, mondayConnections, projects, syncRuns, tasks, users } from "@/lib/db/schema";
 import { isMissingIntegrationSchemaError } from "@/lib/integrations/schema-compat";
@@ -214,16 +215,8 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
       if (!refreshToken) {
         throw new Error("Asana token expired and no refresh token is available. Reconnect Asana.");
       }
-      const refreshed = await refreshAsanaAccessToken(refreshToken);
+      const refreshed = await refreshAndPersistAsanaConnection(userId, refreshToken);
       accessToken = refreshed.access_token;
-      await db
-        .update(asanaConnections)
-        .set({
-          accessTokenEncrypted: encrypt(refreshed.access_token),
-          refreshTokenEncrypted: encrypt(refreshed.refresh_token ?? refreshToken),
-          expiresAt: refreshed.expires_in ? new Date(Date.now() + refreshed.expires_in * 1000) : null,
-        })
-        .where(eq(asanaConnections.userId, userId));
       refreshToken = refreshed.refresh_token ?? refreshToken;
     }
 

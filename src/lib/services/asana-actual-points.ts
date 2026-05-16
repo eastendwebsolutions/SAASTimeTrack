@@ -1,8 +1,9 @@
 import { and, eq, isNull, sum } from "drizzle-orm";
-import { asanaRequest, refreshAsanaAccessToken } from "@/lib/asana/client";
+import { refreshAndPersistAsanaConnection } from "@/lib/asana/connection-tokens";
+import { asanaRequest } from "@/lib/asana/client";
 import { db } from "@/lib/db";
 import { asanaConnections, projects, tasks, timeEntries } from "@/lib/db/schema";
-import { decrypt, encrypt } from "@/lib/utils/crypto";
+import { decrypt } from "@/lib/utils/crypto";
 
 function mapHoursToActualPoints(hours: number) {
   if (hours < 0.5) return 1;
@@ -79,17 +80,9 @@ async function updateAsanaActualPoints(target: EntryTarget) {
     if (!refreshToken) {
       throw new Error("Asana token expired and no refresh token is available");
     }
-    const refreshed = await refreshAsanaAccessToken(refreshToken);
+    const refreshed = await refreshAndPersistAsanaConnection(syncedByUserId, refreshToken);
     accessToken = refreshed.access_token;
     refreshToken = refreshed.refresh_token ?? refreshToken;
-    await db
-      .update(asanaConnections)
-      .set({
-        accessTokenEncrypted: encrypt(accessToken),
-        refreshTokenEncrypted: encrypt(refreshToken),
-        expiresAt: refreshed.expires_in ? new Date(Date.now() + refreshed.expires_in * 1000) : null,
-      })
-      .where(eq(asanaConnections.userId, syncedByUserId));
   }
 
   async function asanaRequestWithRefresh<T>(

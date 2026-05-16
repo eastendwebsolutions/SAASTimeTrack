@@ -1,6 +1,7 @@
 import { and, count, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { companies, projects, tasks } from "@/lib/db/schema";
+import { formatAsanaTokenErrorForUser } from "@/lib/asana/token-errors";
 import { getAsanaAccessTokenForUser } from "@/lib/services/poker-planning/asana";
 import type { IntegrationProvider } from "@/lib/integrations/provider";
 import { withProjectsProviderColumnFallback } from "@/lib/integrations/projects-provider-fallback";
@@ -135,7 +136,7 @@ export async function getDashboardIntegrationTaskWidget(args: {
       liveDueDates: true,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to load Asana task due dates.";
+    const message = formatAsanaTokenErrorForUser(error);
     return {
       provider: args.provider,
       assignedTotal,

@@ -1,8 +1,8 @@
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
-import { fetchAsanaMe } from "@/lib/asana/client";
+import { formatAsanaTokenErrorForUser } from "@/lib/asana/token-errors";
+import { getAsanaAccessTokenForUser } from "@/lib/services/poker-planning/asana";
 import { db } from "@/lib/db";
 import { asanaConnections, jiraConnections, mondayConnections, syncRuns } from "@/lib/db/schema";
-import { decrypt } from "@/lib/utils/crypto";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -83,7 +83,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
   const mondayReadiness = await getMondayReadiness();
   const activeProvider = await getActiveProviderForUser(user.id);
 
-  const connection = await db.query.asanaConnections.findFirst({
+  let connection = await db.query.asanaConnections.findFirst({
     where: eq(asanaConnections.userId, user.id),
   });
   const jiraConnection = jiraReadiness.schemaReady
@@ -107,12 +107,25 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
         })
     : null;
 
-  let asanaMe: Awaited<ReturnType<typeof fetchAsanaMe>> | null = null;
+  let asanaMe: { gid: string; name: string | null; email: string | null } | null = null;
+  let asanaTokenWarning: string | null = null;
   if (connection) {
     try {
-      asanaMe = await fetchAsanaMe(decrypt(connection.accessTokenEncrypted));
-    } catch {
+      const { request } = await getAsanaAccessTokenForUser(user.id);
+      asanaMe = await request<{ data: { gid: string; name?: string; email?: string } }>(
+        "/users/me?opt_fields=gid,name,email",
+      ).then((response) => ({
+        gid: response.data.gid,
+        name: response.data.name ?? null,
+        email: response.data.email?.trim() ? response.data.email.trim() : null,
+      }));
+    } catch (error) {
       asanaMe = null;
+      asanaTokenWarning = formatAsanaTokenErrorForUser(error);
+      connection =
+        (await db.query.asanaConnections.findFirst({
+          where: eq(asanaConnections.userId, user.id),
+        })) ?? undefined;
     }
   }
 
@@ -194,6 +207,14 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
             <p className="mt-2 text-xs text-amber-300/90">Detected missing or invalid: {missingKeys.join(", ")}</p>
           ) : null}
           <p className="mt-3 text-xs text-amber-300/80">Save variables, then redeploy the project. After that, use Connect Asana again.</p>
+        </Card>
+      ) : null}
+      {asanaTokenWarning ? (
+        <Card className="border border-amber-800/80 bg-amber-950/40 p-4 text-sm text-amber-100">
+          <p className="font-medium text-amber-50">
+            <IntegrationLabel integration="asana" text="Asana needs to be reconnected" />
+          </p>
+          <p className="mt-2 text-amber-200/90">{asanaTokenWarning}</p>
         </Card>
       ) : null}
       {jiraErrorMessage ? (

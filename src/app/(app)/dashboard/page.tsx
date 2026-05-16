@@ -92,7 +92,16 @@ export default async function DashboardPage() {
                 ? "Assigned counts reflect the last sync to this app. Due today appears when live Asana data can be loaded."
                 : "Assigned counts reflect the last sync. Due today is not computed for this integration yet."}
           </p>
-          {integrationWidget.error ? <p className="mt-2 text-xs text-amber-400">{integrationWidget.error}</p> : null}
+          {integrationWidget.error ? (
+            <p className="mt-2 text-xs text-amber-400">
+              {integrationWidget.error}{" "}
+              {integrationWidget.error.includes("Reconnect Asana") ? (
+                <Link href="/settings/integrations" className="text-indigo-400 hover:text-indigo-300">
+                  Open integration settings
+                </Link>
+              ) : null}
+            </p>
+          ) : null}
           <dl className="mt-4 space-y-3">
             <div className="flex items-baseline justify-between gap-2">
               <dt className="text-sm text-zinc-400">Assigned to me (open)</dt>
