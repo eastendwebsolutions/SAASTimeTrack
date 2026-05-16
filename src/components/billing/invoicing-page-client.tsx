@@ -6,7 +6,12 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { InvoicePreview } from "@/components/billing/invoice-preview";
 import { formatInvoiceCurrency, sumInvoiceLineItems } from "@/lib/services/billing/invoice";
-import type { InvoiceLineItem, UserBillingProfileInput, UserBillingSnapshot } from "@/lib/validation/billing";
+import {
+  REQUIRED_USER_BILLING_FIELD_LABELS,
+  type InvoiceLineItem,
+  type UserBillingProfileInput,
+  type UserBillingSnapshot,
+} from "@/lib/validation/billing";
 
 type BillingCurrentResponse = {
   period: { id: string; label: string };
@@ -170,11 +175,11 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
 
       {!current?.profileComplete ? (
         <Card className="border-amber-600/50 bg-amber-900/20 p-4 text-amber-200">
-          Complete your{" "}
+          Complete all required fields in your{" "}
           <Link href="/billing/user-settings" className="underline">
             user billing information
           </Link>{" "}
-          before submitting an invoice.
+          before submitting an invoice: {REQUIRED_USER_BILLING_FIELD_LABELS.join(", ")}.
         </Card>
       ) : null}
 

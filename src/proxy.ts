@@ -48,6 +48,10 @@ function isIntegrationOAuthBypass(pathname: string): boolean {
 }
 
 export default clerkMiddleware(async (auth, req) => {
+  if (req.nextUrl.pathname.startsWith("/api/cron/")) {
+    return NextResponse.next();
+  }
+
   if (!isProtectedRoute(req)) {
     return NextResponse.next();
   }

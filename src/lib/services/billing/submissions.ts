@@ -139,17 +139,17 @@ export async function createBillingSubmission({
 
   const nextAttempt = (current.latestSubmission?.submissionAttemptNumber ?? 0) + 1;
   const periodLabel = getBillingPeriodLabel(current.period.periodStartDate, current.period.periodEndDate);
-  const subject = buildInvoiceSubject({
-    userDisplayName: userName,
-    invoiceNumber: parsed.invoiceNumber,
-    periodLabel,
-  });
   const submittedAtLocalLabel = formatSubmittedAtEasternLabel(now);
   const billingSnapshot: UserBillingSnapshot = {
     ...current.profile,
     userDisplayName: userName,
     userEmail: user.email,
   };
+  const subject = buildInvoiceSubject({
+    billingSnapshot,
+    invoiceNumber: parsed.invoiceNumber,
+    periodLabel,
+  });
 
   const [submission] = await db
     .insert(billingSubmissions)

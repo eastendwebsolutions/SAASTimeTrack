@@ -35,21 +35,31 @@ export const billingSubmissionCreateSchema = z.object({
   bodyContent: z.string().max(5000).optional().nullable(),
 });
 
-export const userBillingProfileSchema = z
-  .object({
-    address: z.string().trim().min(1, "Address is required.").max(255),
-    address2: z.string().trim().max(255).optional().nullable(),
-    city: z.string().trim().min(1, "City is required.").max(120),
-    state: z.string().trim().max(120).optional().nullable(),
-    province: z.string().trim().max(120).optional().nullable(),
-    zip: z.string().trim().min(1, "Zip is required.").max(32),
-    phone: z.string().trim().min(1, "Phone is required.").max(50),
-    paypalAddress: z.string().trim().min(1, "PayPal address is required.").max(255),
-  })
-  .refine((data) => Boolean(data.state?.trim() || data.province?.trim()), {
-    message: "State or province is required.",
-    path: ["state"],
-  });
+export const userBillingProfileSchema = z.object({
+  firstName: z.string().trim().min(1, "First name is required.").max(120),
+  lastName: z.string().trim().min(1, "Last name is required.").max(120),
+  address: z.string().trim().min(1, "Address is required.").max(255),
+  address2: z.string().trim().max(255).optional().nullable(),
+  city: z.string().trim().min(1, "City is required.").max(120),
+  state: z.string().trim().min(1, "State is required.").max(120),
+  province: z.string().trim().max(120).optional().nullable(),
+  zip: z.string().trim().min(1, "Zip is required.").max(32),
+  country: z.string().trim().min(1, "Country is required.").max(120),
+  phone: z.string().trim().min(1, "Phone is required.").max(50),
+  paypalAddress: z.string().trim().min(1, "PayPal address is required.").max(255),
+});
+
+export const REQUIRED_USER_BILLING_FIELD_LABELS = [
+  "First name",
+  "Last name",
+  "Address",
+  "City",
+  "State",
+  "Zip",
+  "Country",
+  "Phone",
+  "PayPal address",
+] as const;
 
 export type InvoiceLineItem = z.infer<typeof invoiceLineItemSchema>;
 export type UserBillingProfileInput = z.infer<typeof userBillingProfileSchema>;

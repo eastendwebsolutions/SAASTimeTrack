@@ -9,15 +9,15 @@ export function sumInvoiceLineItems(lineItems: InvoiceLineItem[]) {
 }
 
 export function buildInvoiceSubject({
-  userDisplayName,
+  billingSnapshot,
   invoiceNumber,
   periodLabel,
 }: {
-  userDisplayName: string;
+  billingSnapshot: UserBillingSnapshot;
   invoiceNumber: string;
   periodLabel: string;
 }) {
-  return `Invoice ${invoiceNumber} — ${userDisplayName} (${periodLabel})`;
+  return `Invoice ${invoiceNumber} — ${formatInvoiceBillFromName(billingSnapshot)} (${periodLabel})`;
 }
 
 function escapeHtml(input: string) {
@@ -29,11 +29,19 @@ function escapeHtml(input: string) {
     .replace(/'/g, "&#039;");
 }
 
+export function formatInvoiceBillFromName(snapshot: UserBillingSnapshot) {
+  return `${snapshot.firstName} ${snapshot.lastName}`.trim();
+}
+
 function formatAddress(snapshot: UserBillingSnapshot) {
+  const cityLine = [snapshot.city, snapshot.state?.trim() || snapshot.province?.trim(), snapshot.zip].filter(Boolean).join(", ");
   const lines = [
+    formatInvoiceBillFromName(snapshot),
+    snapshot.userEmail,
     snapshot.address,
     snapshot.address2?.trim() ? snapshot.address2.trim() : null,
-    [snapshot.city, snapshot.state?.trim() || snapshot.province?.trim(), snapshot.zip].filter(Boolean).join(", "),
+    cityLine,
+    snapshot.country,
     snapshot.phone ? `Phone: ${snapshot.phone}` : null,
     snapshot.paypalAddress ? `PayPal: ${snapshot.paypalAddress}` : null,
   ].filter(Boolean);
@@ -79,8 +87,6 @@ export function buildInvoiceHtml({
         <tr>
           <td style="vertical-align:top;width:50%;">
             <strong>Bill From</strong><br/>
-            ${escapeHtml(billingSnapshot.userDisplayName)}<br/>
-            ${escapeHtml(billingSnapshot.userEmail)}<br/>
             ${formatAddress(billingSnapshot)}
           </td>
           <td style="vertical-align:top;width:50%;">

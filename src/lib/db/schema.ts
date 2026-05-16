@@ -104,12 +104,15 @@ export const userBillingProfiles = pgTable("user_billing_profiles", {
   userId: uuid("user_id")
     .primaryKey()
     .references(() => users.id, { onDelete: "cascade" }),
+  firstName: varchar("first_name", { length: 120 }).notNull(),
+  lastName: varchar("last_name", { length: 120 }).notNull(),
   address: varchar("address", { length: 255 }).notNull(),
   address2: varchar("address_2", { length: 255 }),
   city: varchar("city", { length: 120 }).notNull(),
-  state: varchar("state", { length: 120 }),
+  state: varchar("state", { length: 120 }).notNull(),
   province: varchar("province", { length: 120 }),
   zip: varchar("zip", { length: 32 }).notNull(),
+  country: varchar("country", { length: 120 }).notNull(),
   phone: varchar("phone", { length: 50 }).notNull(),
   paypalAddress: varchar("paypal_address", { length: 255 }).notNull(),
   ...timestamps,

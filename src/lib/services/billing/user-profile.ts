@@ -20,24 +20,30 @@ export async function upsertUserBillingProfile(userId: string, input: UserBillin
     .insert(userBillingProfiles)
     .values({
       userId,
+      firstName: parsed.firstName,
+      lastName: parsed.lastName,
       address: parsed.address,
       address2: parsed.address2?.trim() || null,
       city: parsed.city,
-      state: parsed.state?.trim() || null,
+      state: parsed.state,
       province: parsed.province?.trim() || null,
       zip: parsed.zip,
+      country: parsed.country,
       phone: parsed.phone,
       paypalAddress: parsed.paypalAddress,
     })
     .onConflictDoUpdate({
       target: userBillingProfiles.userId,
       set: {
+        firstName: parsed.firstName,
+        lastName: parsed.lastName,
         address: parsed.address,
         address2: parsed.address2?.trim() || null,
         city: parsed.city,
-        state: parsed.state?.trim() || null,
+        state: parsed.state,
         province: parsed.province?.trim() || null,
         zip: parsed.zip,
+        country: parsed.country,
         phone: parsed.phone,
         paypalAddress: parsed.paypalAddress,
         updatedAt: new Date(),
@@ -50,24 +56,30 @@ export async function upsertUserBillingProfile(userId: string, input: UserBillin
 
 export function toUserBillingProfileInput(
   profile: {
+    firstName: string;
+    lastName: string;
     address: string;
     address2: string | null;
     city: string;
     state: string | null;
     province: string | null;
     zip: string;
+    country: string;
     phone: string;
     paypalAddress: string;
   } | null | undefined,
 ): UserBillingProfileInput | null {
   if (!profile) return null;
   return {
+    firstName: profile.firstName,
+    lastName: profile.lastName,
     address: profile.address,
     address2: profile.address2,
     city: profile.city,
-    state: profile.state,
+    state: profile.state ?? "",
     province: profile.province,
     zip: profile.zip,
+    country: profile.country,
     phone: profile.phone,
     paypalAddress: profile.paypalAddress,
   };

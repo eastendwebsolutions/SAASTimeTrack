@@ -170,7 +170,11 @@ export function BillingAdminSubmissionsClient({ isSuperAdmin, companyId }: { isS
           </p>
           {selected.userBillingSnapshotJson ? (
             <div className="rounded border border-zinc-800 p-3 text-sm text-zinc-300">
-              <p className="font-medium text-zinc-100">{selected.userBillingSnapshotJson.userDisplayName}</p>
+              <p className="font-medium text-zinc-100">
+                {selected.userBillingSnapshotJson.firstName && selected.userBillingSnapshotJson.lastName
+                  ? `${selected.userBillingSnapshotJson.firstName} ${selected.userBillingSnapshotJson.lastName}`
+                  : selected.userBillingSnapshotJson.userDisplayName}
+              </p>
               <p>{selected.userBillingSnapshotJson.userEmail}</p>
               <p className="mt-2">
                 {selected.userBillingSnapshotJson.address}
@@ -180,6 +184,7 @@ export function BillingAdminSubmissionsClient({ isSuperAdmin, companyId }: { isS
                 {selected.userBillingSnapshotJson.city}, {selected.userBillingSnapshotJson.state || selected.userBillingSnapshotJson.province}{" "}
                 {selected.userBillingSnapshotJson.zip}
               </p>
+              {selected.userBillingSnapshotJson.country ? <p>{selected.userBillingSnapshotJson.country}</p> : null}
               <p>Phone: {selected.userBillingSnapshotJson.phone}</p>
               <p>PayPal: {selected.userBillingSnapshotJson.paypalAddress}</p>
             </div>
