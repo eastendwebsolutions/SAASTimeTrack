@@ -89,6 +89,8 @@ export type IntegrationTaskWidget = {
   dueToday: number | null;
   liveDueDates: boolean;
   error?: string;
+  /** Super admins without a personal integration see guidance instead of live provider stats. */
+  optionalNote?: string;
 };
 
 export async function getDashboardIntegrationTaskWidget(args: {

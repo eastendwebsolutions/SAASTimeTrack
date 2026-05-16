@@ -1,4 +1,5 @@
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
+import { requiresPersonalIntegration } from "@/lib/auth/integration-requirements";
 import { formatAsanaTokenErrorForUser } from "@/lib/asana/token-errors";
 import { getAsanaAccessTokenForUser } from "@/lib/services/poker-planning/asana";
 import { db } from "@/lib/db";
@@ -168,9 +169,20 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
         })
     : null;
 
+  const integrationOptional = !requiresPersonalIntegration(user.role);
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Integrations</h1>
+      {integrationOptional ? (
+        <Card className="border border-indigo-500/30 bg-indigo-950/20 p-4 text-sm text-indigo-100">
+          <p className="font-medium text-indigo-50">Super admin: integration is optional</p>
+          <p className="mt-2 text-indigo-200/90">
+            You can use Dashboard, Admin, Reports, and Billing without connecting your own Asana, Jira, or Monday account.
+            Connect a provider only if you personally track time or want live task counts on your dashboard.
+          </p>
+        </Card>
+      ) : null}
       {asanaErrorMessage ? (
         <Card className="border border-rose-900/80 bg-rose-950/40 p-4 text-sm text-rose-100">
           <p className="font-medium text-rose-50">

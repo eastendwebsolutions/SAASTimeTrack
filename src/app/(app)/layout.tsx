@@ -2,7 +2,8 @@ import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
-import { canReviewEntries } from "@/lib/auth/rbac";
+import { canReviewEntries, isSuperAdmin } from "@/lib/auth/rbac";
+import { requiresPersonalIntegration } from "@/lib/auth/integration-requirements";
 import { TimezoneSync } from "@/components/providers/timezone-sync";
 import { AsanaHeaderStatus } from "@/components/integrations/asana-header-status";
 import { TeamStatusHeaderIndicator } from "@/components/team-status/header-indicator";
@@ -56,7 +57,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     : null;
   const canSeeAdmin = Boolean(user && canReviewEntries(user.role));
   const canSeePokerPlanning = Boolean(user);
-  const appHomeHref = user?.role === "user" ? "/dashboard" : "/time";
+  const appHomeHref =
+    user?.role === "user" || (user && isSuperAdmin(user.role)) ? "/dashboard" : "/time";
+  const integrationOptional = user ? !requiresPersonalIntegration(user.role) : false;
 
   const latestSyncedAt = latestSuccessfulRun?.endedAt;
   const latestSyncLabel = latestSyncedAt
@@ -123,6 +126,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                     ? Boolean(jiraConnection)
                     : Boolean(mondayConnection)
               }
+              integrationOptional={integrationOptional}
               lastSyncLabel={latestSyncLabel}
               lastSyncedAtIso={latestSyncedAt ? latestSyncedAt.toISOString() : null}
               timezone={user?.timezone ?? "UTC"}

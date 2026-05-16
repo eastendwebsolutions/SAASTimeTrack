@@ -13,6 +13,7 @@ const SYNC_REMINDER_INTERVAL_MS = 8 * 60 * 60 * 1000;
 type Props = {
   provider: "asana" | "jira" | "monday";
   connected: boolean;
+  integrationOptional?: boolean;
   lastSyncLabel: string;
   lastSyncedAtIso: string | null;
   timezone: string;
@@ -22,7 +23,14 @@ function getReminderKey(userId: string) {
   return `saastimetrack:asana-sync-reminder:last-prompt:${userId}`;
 }
 
-export function AsanaHeaderStatus({ provider, connected, lastSyncLabel, lastSyncedAtIso, timezone }: Props) {
+export function AsanaHeaderStatus({
+  provider,
+  connected,
+  integrationOptional = false,
+  lastSyncLabel,
+  lastSyncedAtIso,
+  timezone,
+}: Props) {
   const { userId } = useAuth();
   const router = useRouter();
   const [isSyncing, setIsSyncing] = useState(false);
@@ -118,7 +126,13 @@ export function AsanaHeaderStatus({ provider, connected, lastSyncLabel, lastSync
     <>
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-300">
         <p className="font-medium text-zinc-100">
-          <IntegrationLabel integration={provider} text={`${provider[0].toUpperCase()}${provider.slice(1)}: ${connected ? "Connected" : "Not Connected"}`} className="inline-flex items-center gap-1.5" />
+          <IntegrationLabel
+            integration={provider}
+            text={`${provider[0].toUpperCase()}${provider.slice(1)}: ${
+              connected ? "Connected" : integrationOptional ? "Optional (not connected)" : "Not Connected"
+            }`}
+            className="inline-flex items-center gap-1.5"
+          />
         </p>
         <p>Last sync: {lastSyncLabel}</p>
         <p>Timezone: {timezone}</p>
@@ -133,6 +147,13 @@ export function AsanaHeaderStatus({ provider, connected, lastSyncLabel, lastSync
             >
               <IntegrationLabel integration={provider} text={isSyncing ? "Syncing..." : `Sync ${provider[0].toUpperCase()}${provider.slice(1)}`} />
             </Button>
+          ) : integrationOptional ? (
+            <Link
+              href="/admin/review"
+              className="inline-flex rounded-md bg-zinc-800 px-2 py-1 text-xs font-medium text-zinc-100 transition hover:bg-zinc-700"
+            >
+              Open Admin
+            </Link>
           ) : (
             <Link
               href="/settings/integrations"

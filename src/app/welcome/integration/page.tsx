@@ -1,6 +1,7 @@
 import { UserButton } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
+import { requiresPersonalIntegration } from "@/lib/auth/integration-requirements";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { IntegrationLabel } from "@/components/integrations/integration-label";
@@ -18,6 +19,10 @@ export default async function WelcomeIntegrationPage() {
   const user = await getOrCreateCurrentUser();
   if (!user) {
     return null;
+  }
+
+  if (!requiresPersonalIntegration(user.role)) {
+    redirect("/dashboard");
   }
 
   const hasAny = await userHasAnyIntegrationConnectionByClerkUserId(userId);

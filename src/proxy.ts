@@ -1,6 +1,9 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { userHasAnyIntegrationConnectionByClerkUserId } from "@/lib/integrations/connection-gate";
+import {
+  isSuperAdminByClerkUserId,
+  userHasAnyIntegrationConnectionByClerkUserId,
+} from "@/lib/integrations/connection-gate";
 
 const isProtectedRoute = createRouteMatcher([
   "/time(.*)",
@@ -69,8 +72,11 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.next();
   }
 
-  const hasIntegration = await userHasAnyIntegrationConnectionByClerkUserId(userId);
-  if (!hasIntegration) {
+  const [hasIntegration, superAdmin] = await Promise.all([
+    userHasAnyIntegrationConnectionByClerkUserId(userId),
+    isSuperAdminByClerkUserId(userId),
+  ]);
+  if (!hasIntegration && !superAdmin) {
     return NextResponse.redirect(new URL("/welcome/integration", req.url));
   }
 
