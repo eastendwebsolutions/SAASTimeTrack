@@ -1,5 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { canonicalHostRedirect } from "@/lib/canonical-host";
 import {
   isSuperAdminByClerkUserId,
   userHasAnyIntegrationConnectionByClerkUserId,
@@ -48,6 +49,11 @@ function isIntegrationOAuthBypass(pathname: string): boolean {
 }
 
 export default clerkMiddleware(async (auth, req) => {
+  const canonical = canonicalHostRedirect(req);
+  if (canonical) {
+    return canonical;
+  }
+
   if (req.nextUrl.pathname.startsWith("/api/cron/")) {
     return NextResponse.next();
   }

@@ -74,7 +74,7 @@ Copy names from `.env.example`. Minimum:
 | `DATABASE_URL` | From Vercel Storage / Neon |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk **production** publishable key |
 | `CLERK_SECRET_KEY` | Clerk **production** secret |
-| `NEXT_PUBLIC_APP_URL` | `https://<your-project>.vercel.app` or custom domain |
+| `NEXT_PUBLIC_APP_URL` | `https://whosaas.com` (production canonical URL) |
 | `ASANA_CLIENT_ID` / `ASANA_CLIENT_SECRET` | Your Asana app |
 | `ASANA_REDIRECT_URI` | `https://<your-domain>/api/asana/callback` (must match Asana app exactly) |
 | `ENCRYPTION_KEY` | Same 32+ char secret as local (or new one—users must reconnect Asana) |

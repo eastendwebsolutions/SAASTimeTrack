@@ -79,7 +79,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams?
   const mondayErrorMessage = mondayErrorCode ? MONDAY_ERROR_MESSAGES[mondayErrorCode] ?? `Something went wrong (${mondayErrorCode}).` : null;
   const mondayConnectedNow = params.monday_connected === "1";
   const triggerMondayInitialSync = mondayConnectedNow;
-  const appBase = (process.env.NEXT_PUBLIC_APP_URL ?? "https://your-production-domain").replace(/\/$/, "");
+  const appBase = (process.env.NEXT_PUBLIC_APP_URL ?? "https://whosaas.com").replace(/\/$/, "");
   const asanaCallbackExample = `${appBase}/api/asana/callback`;
   const jiraCallbackExample = `${appBase}/api/jira/callback`;
   const jiraReadiness = await getJiraReadiness();
