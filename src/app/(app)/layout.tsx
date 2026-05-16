@@ -1,12 +1,9 @@
-import Link from "next/link";
-import { UserButton } from "@clerk/nextjs";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
 import { canReviewEntries, isSuperAdmin } from "@/lib/auth/rbac";
 import { requiresPersonalIntegration } from "@/lib/auth/integration-requirements";
 import { TimezoneSync } from "@/components/providers/timezone-sync";
-import { AsanaHeaderStatus } from "@/components/integrations/asana-header-status";
-import { TeamStatusHeaderIndicator } from "@/components/team-status/header-indicator";
+import { AppHeader } from "@/components/layout/app-header";
 import { db } from "@/lib/db";
 import { asanaConnections, jiraConnections, mondayConnections, syncRuns } from "@/lib/db/schema";
 import { getActiveProviderForUser } from "@/lib/integrations/provider";
@@ -73,96 +70,43 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       })
     : "Not synced yet";
 
+  const navItems = [
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/time", label: "Time" },
+    { href: "/billing", label: "Billing" },
+    { href: "/reports", label: "Reports" },
+    ...(canSeePokerPlanning ? [{ href: "/poker-planning", label: "Poker" }] : []),
+    ...(canSeeAdmin ? [{ href: "/admin/review", label: "Admin" }] : []),
+  ];
+
+  const timesheetItems = [
+    { href: "/timesheet", label: "Current timesheet" },
+    { href: "/timesheet/archive", label: "Archive" },
+  ];
+
   return (
     <div className="min-h-screen">
       <TimezoneSync currentTimezone={user?.timezone ?? null} />
-      <header className="border-b border-zinc-800 bg-zinc-950/90 px-6 py-4 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href={appHomeHref} className="font-semibold text-indigo-300">
-              SaaSTimeTrack
-            </Link>
-            <nav className="flex items-center gap-4 text-sm text-zinc-300">
-              <Link href="/dashboard">Dashboard</Link>
-              <Link href="/time">Time Entry</Link>
-              <Link href="/billing">Billing</Link>
-              <Link href="/reports">Reports</Link>
-              <div className="group relative">
-                <Link href="/timesheet" className="inline-flex items-center gap-1">
-                  Timesheet
-                  <span className="text-xs text-zinc-500">▾</span>
-                </Link>
-                <div className="invisible absolute left-0 top-full z-20 min-w-40 rounded-md border border-zinc-800 bg-zinc-950/95 p-1 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
-                  <Link href="/timesheet/archive" className="block rounded px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
-                    Archive
-                  </Link>
-                </div>
-              </div>
-            </nav>
-          </div>
-          <div className="flex items-center gap-3">
-            {canSeePokerPlanning ? (
-              <Link
-                href="/poker-planning"
-                className="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
-              >
-                Poker Planning
-              </Link>
-            ) : null}
-            {canSeeAdmin ? (
-              <Link
-                href="/admin/review"
-                className="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
-              >
-                Admin
-              </Link>
-            ) : null}
-            <AsanaHeaderStatus
-              provider={activeProvider}
-              connected={
-                activeProvider === "asana"
-                  ? Boolean(asanaConnection)
-                  : activeProvider === "jira"
-                    ? Boolean(jiraConnection)
-                    : Boolean(mondayConnection)
-              }
-              integrationOptional={integrationOptional}
-              lastSyncLabel={latestSyncLabel}
-              lastSyncedAtIso={latestSyncedAt ? latestSyncedAt.toISOString() : null}
-              timezone={user?.timezone ?? "UTC"}
-            />
-            <TeamStatusHeaderIndicator />
-            <div className="group relative">
-              <UserButton />
-              <div className="invisible absolute right-0 top-full z-20 min-w-44 rounded-md border border-zinc-800 bg-zinc-950/95 p-1 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
-                <Link href="/settings/profile" className="block rounded px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
-                  Profile
-                </Link>
-                <Link href="/settings/integrations" className="block rounded px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
-                  Integrations
-                </Link>
-                {canSeeAdmin ? (
-                  <>
-                    <Link href="/admin/billing/settings" className="block rounded px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
-                      Billing Settings
-                    </Link>
-                    <Link href="/admin/billing/submissions" className="block rounded px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
-                      Billing Submissions
-                    </Link>
-                    <Link
-                      href="/reports/developer-effectiveness"
-                      className="block rounded px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
-                    >
-                      AI effectiveness
-                    </Link>
-                  </>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
+      <AppHeader
+        appHomeHref={appHomeHref}
+        navItems={navItems}
+        timesheetItems={timesheetItems}
+        canSeeAdmin={canSeeAdmin}
+        integration={{
+          provider: activeProvider,
+          connected:
+            activeProvider === "asana"
+              ? Boolean(asanaConnection)
+              : activeProvider === "jira"
+                ? Boolean(jiraConnection)
+                : Boolean(mondayConnection),
+          integrationOptional,
+          lastSyncLabel: latestSyncLabel,
+          lastSyncedAtIso: latestSyncedAt ? latestSyncedAt.toISOString() : null,
+          timezone: user?.timezone ?? "UTC",
+        }}
+      />
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">{children}</main>
     </div>
   );
 }
