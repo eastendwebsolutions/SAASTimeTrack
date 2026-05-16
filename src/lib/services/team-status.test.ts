@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { evaluateDayStatus, getAvailableActions } from "./team-status";
+import {
+  addCalendarDaysInNy,
+  evaluateDayStatus,
+  getAvailableActions,
+  nyDateRangeUtcBounds,
+  toNyDateKey,
+} from "./team-status";
 
 function event(eventType: "DAY_IN" | "DAY_OUT" | "BREAK_IN" | "BREAK_OUT", iso: string) {
   return {
@@ -52,6 +58,21 @@ describe("team status state machine", () => {
     const status = evaluateDayStatus([event("BREAK_OUT", "2026-04-27T12:00:00.000Z")], new Date("2026-04-27T12:05:00.000Z"));
     expect(status.status).toBe("Needs Review");
     expect(status.needsReview).toBe(true);
+  });
+});
+
+describe("NY date helpers", () => {
+  it("steps calendar days in Eastern time", () => {
+    expect(addCalendarDaysInNy("2026-05-16", -1)).toBe("2026-05-15");
+    expect(addCalendarDaysInNy("2026-05-16", 1)).toBe("2026-05-17");
+  });
+
+  it("builds UTC bounds that include an event on the inclusive end day", () => {
+    const { startUtc, endUtcExclusive } = nyDateRangeUtcBounds("2026-05-15", "2026-05-16");
+    const eventAt = new Date("2026-05-16T15:30:00.000Z");
+    expect(eventAt.getTime()).toBeGreaterThanOrEqual(startUtc.getTime());
+    expect(eventAt.getTime()).toBeLessThan(endUtcExclusive.getTime());
+    expect(toNyDateKey(eventAt)).toBe("2026-05-16");
   });
 });
 

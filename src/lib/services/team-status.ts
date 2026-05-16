@@ -1,7 +1,8 @@
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { companies, teamStatusEvents, users } from "@/lib/db/schema";
 import type { Role } from "@/lib/auth/rbac";
+import { resolveWorkspaceCompanyIdsForCompanyAdmin } from "@/lib/services/admin-workspace-scope";
 import { getClerkDisplayNames } from "@/lib/services/clerk-admin";
 import { buildWorkspaceOptions, resolveWorkspaceScopedCompanyIdsForSuperAdmin } from "@/lib/services/workspace-options";
 
@@ -79,19 +80,36 @@ export function toNyDateKey(date: Date) {
   return getNyParts(date).dateKey;
 }
 
+/** Start of a calendar day in America/New_York, as a UTC instant. */
 export function nyDateKeyToTimestamp(dateKey: string) {
   const [year, month, day] = dateKey.split("-").map(Number);
-  return new Date(year, month - 1, day, 0, 0, 0, 0);
+  for (let utcHour = 0; utcHour < 48; utcHour += 1) {
+    const dayOffset = utcHour >= 24 ? 1 : 0;
+    const hour = utcHour % 24;
+    const candidate = new Date(Date.UTC(year, month - 1, day + dayOffset, hour, 0, 0, 0));
+    const parts = getNyParts(candidate);
+    if (parts.dateKey === dateKey && parts.hour === 0 && parts.minute === 0 && parts.second === 0) {
+      return candidate;
+    }
+  }
+  return new Date(Date.UTC(year, month - 1, day, 5, 0, 0, 0));
+}
+
+export function addCalendarDaysInNy(dateKey: string, days: number) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const probe = new Date(Date.UTC(year, month - 1, day + days, 12, 0, 0, 0));
+  return toNyDateKey(probe);
 }
 
 function yesterdayDateKey(todayDateKey: string) {
-  const today = nyDateKeyToTimestamp(todayDateKey);
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const year = String(yesterday.getFullYear()).padStart(4, "0");
-  const month = String(yesterday.getMonth() + 1).padStart(2, "0");
-  const day = String(yesterday.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return addCalendarDaysInNy(todayDateKey, -1);
+}
+
+export function nyDateRangeUtcBounds(startKey: string, endKeyInclusive: string) {
+  return {
+    startUtc: nyDateKeyToTimestamp(startKey),
+    endUtcExclusive: nyDateKeyToTimestamp(addCalendarDaysInNy(endKeyInclusive, 1)),
+  };
 }
 
 export function eventMessageFor(type: TeamStatusEventType, userDisplayName: string) {
@@ -294,6 +312,9 @@ export async function getScopeCompanyIds(actor: { role: Role; companyId: string 
   if (actor.role === "super_admin") {
     return resolveWorkspaceScopedCompanyIdsForSuperAdmin(requestedCompanyId ?? actor.companyId);
   }
+  if (actor.role === "company_admin") {
+    return resolveWorkspaceCompanyIdsForCompanyAdmin(actor.companyId);
+  }
   return [actor.companyId];
 }
 
@@ -330,8 +351,13 @@ export async function listTeamStatusFeed(params: {
   }
   if (params.userIds?.length) whereParts.push(inArray(teamStatusEvents.userId, params.userIds));
   if (params.eventTypes?.length) whereParts.push(inArray(teamStatusEvents.eventType, params.eventTypes));
-  if (startKey) whereParts.push(gte(teamStatusEvents.eventLocalDate, nyDateKeyToTimestamp(startKey)));
-  if (endKey) whereParts.push(lte(teamStatusEvents.eventLocalDate, nyDateKeyToTimestamp(endKey)));
+  if (startKey || endKey) {
+    const rangeStart = startKey ?? endKey!;
+    const rangeEnd = endKey ?? startKey!;
+    const { startUtc, endUtcExclusive } = nyDateRangeUtcBounds(rangeStart, rangeEnd);
+    whereParts.push(gte(teamStatusEvents.eventTimestampUtc, startUtc));
+    whereParts.push(lt(teamStatusEvents.eventTimestampUtc, endUtcExclusive));
+  }
 
   const rows = await db
     .select({

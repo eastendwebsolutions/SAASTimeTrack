@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { addCalendarDaysInNy, getNowInNy } from "@/lib/services/team-status";
 
 type Action = { eventType: "DAY_IN" | "DAY_OUT" | "BREAK_IN" | "BREAK_OUT"; enabled: boolean; reason?: string };
 type CurrentPayload = {
@@ -23,6 +24,7 @@ type FeedPayload = {
     eventType: Action["eventType"];
     message: string;
     eventTimestampLocalLabel: string;
+    eventLocalDate: string;
   }>;
   users: Array<{ id: string; displayName: string; email: string }>;
   companies: Array<{ id: string; name: string }>;
@@ -103,6 +105,29 @@ export function TeamStatusPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
     const seconds = current.status === "Working" ? current.active_work_seconds + tick : current.active_work_seconds;
     return formatClock(seconds);
   }, [current, tick]);
+
+  const groupedFeedEvents = useMemo(() => {
+    const groups = new Map<string, FeedPayload["events"]>();
+    for (const event of feed?.events ?? []) {
+      const list = groups.get(event.eventLocalDate) ?? [];
+      list.push(event);
+      groups.set(event.eventLocalDate, list);
+    }
+    return Array.from(groups.entries()).sort(([left], [right]) => right.localeCompare(left));
+  }, [feed?.events]);
+
+  function dayHeading(dateKey: string) {
+    const todayKey = getNowInNy().dateKey;
+    const yesterdayKey = addCalendarDaysInNy(todayKey, -1);
+    if (dateKey === todayKey) return "Today";
+    if (dateKey === yesterdayKey) return "Yesterday";
+    const [year, month, day] = dateKey.split("-").map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+  }
 
   async function submitAction() {
     if (!pendingAction) return;
@@ -208,8 +233,11 @@ export function TeamStatusPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         {feed?.requiresCompanyFilter ? (
           <p className="text-sm text-zinc-400">Select a company to view team status events.</p>
         ) : (
-          <div className="space-y-2">
-            {(feed?.events ?? []).map((event) => (
+          <div className="space-y-4">
+            {groupedFeedEvents.map(([dateKey, events]) => (
+              <section key={dateKey} className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{dayHeading(dateKey)}</h3>
+                {events.map((event) => (
               <div key={event.id} className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-3">
                 <div className="flex items-center gap-3">
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-800 text-xs font-semibold text-zinc-100">
@@ -221,6 +249,8 @@ export function TeamStatusPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   </div>
                 </div>
               </div>
+                ))}
+              </section>
             ))}
             {!feed?.events.length ? <p className="text-sm text-zinc-500">No team status events for today or yesterday.</p> : null}
           </div>
