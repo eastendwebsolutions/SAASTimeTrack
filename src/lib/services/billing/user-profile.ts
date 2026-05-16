@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { userBillingProfiles } from "@/lib/db/schema";
 import { userBillingProfileSchema, type UserBillingProfileInput } from "@/lib/validation/billing";
@@ -45,10 +45,14 @@ export async function upsertUserBillingProfile(userId: string, input: UserBillin
         country: input.country,
         phone: input.phone,
         paypalAddress: input.paypalAddress,
-        updatedAt: new Date(),
+        updatedAt: sql`now()`,
       },
     })
     .returning();
+
+  if (!row) {
+    return getUserBillingProfile(userId);
+  }
 
   return row;
 }

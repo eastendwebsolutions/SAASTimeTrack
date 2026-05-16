@@ -22,7 +22,11 @@ export async function PUT(request: Request) {
   try {
     const user = await requireBillingUser();
     const body = await request.json();
-    const parsed = userBillingProfileSchema.parse(body);
+    const parsed = userBillingProfileSchema.parse({
+      ...body,
+      address2: typeof body?.address2 === "string" && body.address2.trim() ? body.address2.trim() : null,
+      province: typeof body?.province === "string" && body.province.trim() ? body.province.trim() : null,
+    });
     const profile = await upsertUserBillingProfile(user.id, parsed);
     if (!profile) {
       return NextResponse.json({ error: "Unable to save billing profile" }, { status: 500 });
@@ -35,10 +39,8 @@ export async function PUT(request: Request) {
     if (error instanceof ZodError) {
       return NextResponse.json({ error: error.issues[0]?.message ?? "Invalid billing profile" }, { status: 400 });
     }
+    const message = error instanceof Error ? error.message : "Unable to save billing profile";
     console.error("PUT /api/billing/profile failed", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unable to save billing profile" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

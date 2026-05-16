@@ -61,9 +61,9 @@ export function UserBillingSettingsClient() {
     setError(null);
     try {
       const res = await fetch("/api/billing/profile", { cache: "no-store" });
-      const json = await parseJsonResponse<{ profile?: UserBillingProfileInput; error?: string }>(res);
+      const { data: json, text } = await parseJsonResponse<{ profile?: UserBillingProfileInput; error?: string }>(res);
       if (!res.ok) {
-        setError(json?.error ?? "Unable to load billing information");
+        setError(json?.error ?? (text.slice(0, 200) || "Unable to load billing information"));
         return;
       }
       setProfile({ ...emptyProfile, ...(json?.profile ?? {}) });
@@ -100,9 +100,9 @@ export function UserBillingSettingsClient() {
         body: JSON.stringify(parsed.data),
         signal: controller.signal,
       });
-      const json = await parseJsonResponse<{ profile?: UserBillingProfileInput; error?: string }>(res);
+      const { data: json, text } = await parseJsonResponse<{ profile?: UserBillingProfileInput; error?: string }>(res);
       if (!res.ok) {
-        setError(json?.error ?? "Unable to save billing information");
+        setError(json?.error ?? (text.slice(0, 200) || `Unable to save billing information (${res.status})`));
         return;
       }
       if (!json?.profile) {

@@ -1,12 +1,12 @@
-export async function parseJsonResponse<T>(response: Response): Promise<T | null> {
+export async function parseJsonResponse<T>(response: Response): Promise<{ data: T | null; text: string }> {
   const text = await response.text();
   if (!text.trim()) {
-    return null;
+    return { data: null, text };
   }
 
   try {
-    return JSON.parse(text) as T;
+    return { data: JSON.parse(text) as T, text };
   } catch {
-    return null;
+    return { data: null, text };
   }
 }
