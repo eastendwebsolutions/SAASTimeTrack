@@ -62,6 +62,31 @@ function parseLineItems(items: LineItemDraft[]): InvoiceLineItem[] {
     .filter((item) => item.description.length > 0 && Number.isFinite(item.amount) && item.amount > 0);
 }
 
+function getFormValidationError(invoiceNumber: string, lineItems: LineItemDraft[]) {
+  if (!invoiceNumber.trim()) {
+    return "Enter an invoice number before previewing.";
+  }
+  const parsed = parseLineItems(lineItems);
+  if (parsed.length === 0) {
+    return "Add at least one line item with a description and an amount greater than zero.";
+  }
+  return null;
+}
+
+function getSubmitBlockedReason(current: BillingCurrentResponse | null) {
+  if (!current?.profileComplete) {
+    return `Complete your user billing information (${REQUIRED_USER_BILLING_FIELD_LABELS.join(", ")}) before submitting.`;
+  }
+  if (!current.canSubmit) {
+    const status = current.latestSubmission?.status;
+    if (status === "submitted" || status === "accepted") {
+      return "You already submitted an invoice for this billing period. Check Submission History below, or wait until an admin requests a resubmission.";
+    }
+    return "Invoice submission is not available for the current billing period.";
+  }
+  return null;
+}
+
 export function InvoicingPageClient({ userDisplayName, userEmail }: { userDisplayName: string; userEmail: string }) {
   const [current, setCurrent] = useState<BillingCurrentResponse | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
@@ -104,13 +129,10 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
     };
   }, [current?.profile, userDisplayName, userEmail]);
 
-  const canPreview =
-    Boolean(billingSnapshot) &&
-    invoiceNumber.trim().length > 0 &&
-    parsedLineItems.length > 0 &&
-    current?.profileComplete;
-
-  const canSubmit = Boolean(current?.canSubmit && canPreview);
+  const formValidationError = getFormValidationError(invoiceNumber, lineItems);
+  const submitBlockedReason = getSubmitBlockedReason(current);
+  const isFormReady = Boolean(billingSnapshot && current?.profileComplete && !formValidationError);
+  const canSubmitNow = Boolean(showPreview && isFormReady && current?.canSubmit && !submitting);
 
   function updateLineItem(id: string, patch: Partial<LineItemDraft>) {
     setLineItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
@@ -124,32 +146,55 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
     setLineItems((prev) => (prev.length <= 1 ? prev : prev.filter((item) => item.id !== id)));
   }
 
-  async function submit() {
-    if (!canSubmit) return;
-    setSubmitting(true);
-    setError(null);
-    const res = await fetch("/api/billing/submissions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        invoiceNumber: invoiceNumber.trim(),
-        lineItems: parsedLineItems,
-        bodyContent: notes.trim() || null,
-      }),
-    });
-    const json = await res.json();
-    if (!res.ok) {
-      setError(json.error ?? "Submission failed");
-      setSubmitting(false);
+  function openPreview() {
+    const validationError = getFormValidationError(invoiceNumber, lineItems);
+    if (validationError) {
+      setError(validationError);
       return;
     }
+    if (!current?.profileComplete) {
+      setError(getSubmitBlockedReason(current));
+      return;
+    }
+    setError(null);
+    setShowPreview(true);
+    document.getElementById("invoice-preview-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
-    setInvoiceNumber("");
-    setLineItems([newLineItem()]);
-    setNotes("");
-    setShowPreview(false);
-    await load();
-    setSubmitting(false);
+  async function submit() {
+    if (!canSubmitNow) {
+      setError(submitBlockedReason ?? formValidationError ?? "Complete the invoice form and preview before submitting.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/billing/submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoiceNumber: invoiceNumber.trim(),
+          lineItems: parsedLineItems,
+          bodyContent: notes.trim() || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error ?? "Submission failed");
+        return;
+      }
+
+      setInvoiceNumber("");
+      setLineItems([newLineItem()]);
+      setNotes("");
+      setShowPreview(false);
+      await load();
+      document.getElementById("submission-history")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch {
+      setError("Submission failed. Check your connection and try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function badgeClass(status: string) {
@@ -271,19 +316,23 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
           />
         </label>
 
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" disabled={!canPreview} onClick={() => setShowPreview((value) => !value)}>
-            {showPreview ? "Hide Preview" : "Preview Invoice"}
+        <div className="flex flex-wrap items-center gap-3">
+          <Button disabled={!isFormReady} onClick={openPreview}>
+            Preview Invoice
           </Button>
-          <Button disabled={!canSubmit || submitting} onClick={() => void submit()}>
-            {submitting ? "Submitting..." : "Submit Invoice"}
-          </Button>
+          {!isFormReady && !formValidationError && submitBlockedReason ? (
+            <p className="text-sm text-zinc-500">{submitBlockedReason}</p>
+          ) : null}
+          {!isFormReady && formValidationError ? <p className="text-sm text-zinc-500">{formValidationError}</p> : null}
         </div>
       </Card>
 
       {showPreview && billingSnapshot && current?.period ? (
-        <Card className="space-y-4 p-5">
-          <h2 className="text-lg font-medium">Invoice Preview</h2>
+        <Card id="invoice-preview-panel" className="space-y-4 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-medium">Invoice Preview</h2>
+            <p className="text-sm text-zinc-400">Review your invoice, then submit when ready.</p>
+          </div>
           <InvoicePreview
             invoiceNumber={invoiceNumber.trim()}
             periodLabel={current.period.label}
@@ -293,11 +342,23 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
             userBody={notes.trim() || null}
             defaultFooter={current.settings?.defaultBodyFooter ?? null}
           />
+          {submitBlockedReason ? (
+            <p className="rounded border border-amber-700/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-200">{submitBlockedReason}</p>
+          ) : null}
+          <div className="flex flex-wrap gap-2 border-t border-zinc-800 pt-4">
+            <Button disabled={!canSubmitNow} onClick={() => void submit()}>
+              {submitting ? "Submitting..." : "Submit Invoice"}
+            </Button>
+            <Button variant="secondary" disabled={submitting} onClick={() => setShowPreview(false)}>
+              Back to edit
+            </Button>
+          </div>
         </Card>
       ) : null}
 
-      <Card className="p-5">
-        <h2 className="mb-4 text-lg font-medium">Submission History</h2>
+      <Card id="submission-history" className="p-5">
+        <h2 className="mb-1 text-lg font-medium">Submission History</h2>
+        <p className="mb-4 text-sm text-zinc-500">Every invoice you submit is recorded here with status and line items.</p>
         {history.length === 0 ? <p className="text-sm text-zinc-500">No submissions yet.</p> : null}
         <div className="space-y-3">
           {history.map((row) => {
