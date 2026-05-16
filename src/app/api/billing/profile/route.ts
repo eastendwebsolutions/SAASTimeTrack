@@ -13,6 +13,7 @@ export async function GET() {
     if (error instanceof Error && error.message === "Unauthorized") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    console.error("GET /api/billing/profile failed", error);
     return NextResponse.json({ error: "Unable to load billing profile" }, { status: 500 });
   }
 }
@@ -23,6 +24,9 @@ export async function PUT(request: Request) {
     const body = await request.json();
     const parsed = userBillingProfileSchema.parse(body);
     const profile = await upsertUserBillingProfile(user.id, parsed);
+    if (!profile) {
+      return NextResponse.json({ error: "Unable to save billing profile" }, { status: 500 });
+    }
     return NextResponse.json({ profile: toUserBillingProfileInput(profile) });
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
@@ -31,6 +35,10 @@ export async function PUT(request: Request) {
     if (error instanceof ZodError) {
       return NextResponse.json({ error: error.issues[0]?.message ?? "Invalid billing profile" }, { status: 400 });
     }
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to save billing profile" }, { status: 400 });
+    console.error("PUT /api/billing/profile failed", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unable to save billing profile" },
+      { status: 500 },
+    );
   }
 }

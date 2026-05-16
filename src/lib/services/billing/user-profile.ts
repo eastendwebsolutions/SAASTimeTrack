@@ -15,37 +15,36 @@ export function isUserBillingProfileComplete(profile: UserBillingProfileInput | 
 }
 
 export async function upsertUserBillingProfile(userId: string, input: UserBillingProfileInput) {
-  const parsed = userBillingProfileSchema.parse(input);
   const [row] = await db
     .insert(userBillingProfiles)
     .values({
       userId,
-      firstName: parsed.firstName,
-      lastName: parsed.lastName,
-      address: parsed.address,
-      address2: parsed.address2?.trim() || null,
-      city: parsed.city,
-      state: parsed.state,
-      province: parsed.province?.trim() || null,
-      zip: parsed.zip,
-      country: parsed.country,
-      phone: parsed.phone,
-      paypalAddress: parsed.paypalAddress,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      address: input.address,
+      address2: input.address2?.trim() || null,
+      city: input.city,
+      state: input.state,
+      province: input.province?.trim() || null,
+      zip: input.zip,
+      country: input.country,
+      phone: input.phone,
+      paypalAddress: input.paypalAddress,
     })
     .onConflictDoUpdate({
       target: userBillingProfiles.userId,
       set: {
-        firstName: parsed.firstName,
-        lastName: parsed.lastName,
-        address: parsed.address,
-        address2: parsed.address2?.trim() || null,
-        city: parsed.city,
-        state: parsed.state,
-        province: parsed.province?.trim() || null,
-        zip: parsed.zip,
-        country: parsed.country,
-        phone: parsed.phone,
-        paypalAddress: parsed.paypalAddress,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        address: input.address,
+        address2: input.address2?.trim() || null,
+        city: input.city,
+        state: input.state,
+        province: input.province?.trim() || null,
+        zip: input.zip,
+        country: input.country,
+        phone: input.phone,
+        paypalAddress: input.paypalAddress,
         updatedAt: new Date(),
       },
     })

@@ -1,7 +1,23 @@
+import { auth } from "@clerk/nextjs/server";
+import { eq } from "drizzle-orm";
 import { canManageCompanySettings, canReviewEntries, isSuperAdmin } from "@/lib/auth/rbac";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
+import { db } from "@/lib/db";
+import { users } from "@/lib/db/schema";
 
 export async function requireBillingUser() {
+  const { userId: clerkUserId } = await auth();
+  if (!clerkUserId) {
+    throw new Error("Unauthorized");
+  }
+
+  const existing = await db.query.users.findFirst({
+    where: eq(users.clerkUserId, clerkUserId),
+  });
+  if (existing) {
+    return existing;
+  }
+
   const user = await getOrCreateCurrentUser();
   if (!user) {
     throw new Error("Unauthorized");

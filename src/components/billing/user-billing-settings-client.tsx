@@ -10,7 +10,12 @@ import {
   PRIORITY_COUNTRY_OPTIONS,
   US_STATE_OPTIONS,
 } from "@/lib/constants/geo-options";
-import { REQUIRED_USER_BILLING_FIELD_LABELS, type UserBillingProfileInput } from "@/lib/validation/billing";
+import { parseJsonResponse } from "@/lib/api/parse-json-response";
+import {
+  REQUIRED_USER_BILLING_FIELD_LABELS,
+  userBillingProfileSchema,
+  type UserBillingProfileInput,
+} from "@/lib/validation/billing";
 
 const selectClassName = "w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-sm text-zinc-200";
 
@@ -53,15 +58,20 @@ export function UserBillingSettingsClient() {
 
   async function load() {
     setLoading(true);
-    const res = await fetch("/api/billing/profile");
-    const json = await res.json();
-    if (!res.ok) {
-      setError(json.error ?? "Unable to load billing information");
+    setError(null);
+    try {
+      const res = await fetch("/api/billing/profile", { cache: "no-store" });
+      const json = await parseJsonResponse<{ profile?: UserBillingProfileInput; error?: string }>(res);
+      if (!res.ok) {
+        setError(json?.error ?? "Unable to load billing information");
+        return;
+      }
+      setProfile({ ...emptyProfile, ...(json?.profile ?? {}) });
+    } catch {
+      setError("Unable to load billing information. Check your connection and try again.");
+    } finally {
       setLoading(false);
-      return;
     }
-    setProfile({ ...emptyProfile, ...(json.profile ?? {}) });
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -69,23 +79,48 @@ export function UserBillingSettingsClient() {
   }, []);
 
   async function save() {
+    const parsed = userBillingProfileSchema.safeParse(profile);
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? "Please complete all required fields.");
+      setSaved(false);
+      return;
+    }
+
     setSaving(true);
     setError(null);
     setSaved(false);
-    const res = await fetch("/api/billing/profile", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(profile),
-    });
-    const json = await res.json();
-    if (!res.ok) {
-      setError(json.error ?? "Unable to save billing information");
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 30_000);
+
+    try {
+      const res = await fetch("/api/billing/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed.data),
+        signal: controller.signal,
+      });
+      const json = await parseJsonResponse<{ profile?: UserBillingProfileInput; error?: string }>(res);
+      if (!res.ok) {
+        setError(json?.error ?? "Unable to save billing information");
+        return;
+      }
+      if (!json?.profile) {
+        setError("Save completed but the server returned an unexpected response. Refresh and try again.");
+        return;
+      }
+      setProfile({ ...emptyProfile, ...json.profile });
+      setSaved(true);
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        setError("Save timed out. Please try again.");
+      } else {
+        setError("Unable to save billing information. Check your connection and try again.");
+      }
+    } finally {
+      window.clearTimeout(timeoutId);
       setSaving(false);
-      return;
     }
-    setProfile({ ...emptyProfile, ...(json.profile ?? {}) });
-    setSaved(true);
-    setSaving(false);
   }
 
   function updateField<K extends keyof UserBillingProfileInput>(key: K, value: UserBillingProfileInput[K]) {
@@ -113,7 +148,13 @@ export function UserBillingSettingsClient() {
       {error ? <Card className="border-rose-600/50 bg-rose-900/20 p-4 text-rose-200">{error}</Card> : null}
       {saved ? <Card className="border-emerald-600/50 bg-emerald-900/20 p-4 text-emerald-200">Billing information saved.</Card> : null}
 
-      <Card className="grid gap-4 p-5 sm:grid-cols-2">
+      <form
+        className="grid gap-4 rounded-xl border border-zinc-800 bg-zinc-950/50 p-5 sm:grid-cols-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
+      >
         <label className="space-y-1 text-sm text-zinc-300">
           <RequiredLabel>First Name</RequiredLabel>
           <input
@@ -241,11 +282,11 @@ export function UserBillingSettingsClient() {
           />
         </label>
         <div className="sm:col-span-2">
-          <Button disabled={saving} onClick={() => void save()}>
+          <Button type="submit" disabled={saving}>
             {saving ? "Saving..." : "Save Billing Information"}
           </Button>
         </div>
-      </Card>
+      </form>
     </div>
   );
 }
