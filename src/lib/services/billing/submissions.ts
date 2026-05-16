@@ -8,11 +8,13 @@ import {
   companies,
   users,
 } from "@/lib/db/schema";
-import { storeBillingFiles } from "@/lib/services/storage";
+import { billingSubmissionCreateSchema, type InvoiceLineItem, type UserBillingSnapshot } from "@/lib/validation/billing";
 import { listWorkspaceOptionsForSuperAdmin } from "@/lib/services/workspace-options";
 import { resolveWorkspaceScopedCompanyIdsForSuperAdmin } from "@/lib/services/workspace-options";
-import { buildBillingSubject, formatSubmittedAtEasternLabel, getBillingPeriodLabel, getMostRecentCompletedBillingWeek } from "./period";
+import { formatSubmittedAtEasternLabel, getBillingPeriodLabel, getMostRecentCompletedBillingWeek } from "./period";
+import { buildInvoiceSubject } from "./invoice";
 import { sendBillingSubmissionEmail } from "./email";
+import { getUserBillingProfile, isUserBillingProfileComplete, toUserBillingProfileInput } from "./user-profile";
 
 type AppUser = {
   id: string;
@@ -52,6 +54,8 @@ export async function getCurrentBillingState(user: AppUser) {
   const settings = await db.query.billingSettings.findFirst({
     where: eq(billingSettings.companyId, user.companyId),
   });
+  const profile = await getUserBillingProfile(user.id);
+  const profileInput = toUserBillingProfileInput(profile);
 
   const submissions = await db.query.billingSubmissions.findMany({
     where: and(eq(billingSubmissions.userId, user.id), eq(billingSubmissions.billingPeriodId, period.id)),
@@ -60,14 +64,20 @@ export async function getCurrentBillingState(user: AppUser) {
 
   const latest = submissions[submissions.length - 1] ?? null;
   const canSubmit = canSubmitForLatestSubmission(latest);
+  const profileComplete = isUserBillingProfileComplete(profileInput);
 
   const overdueEnabled = settings?.overdueBannerEnabled ?? true;
   const warning =
     overdueEnabled && (!latest || latest.status === "needs_resubmission")
       ? latest?.status === "needs_resubmission"
-        ? `Your billing submission needs resubmission.`
-        : `Your billing submission for ${period.label} has not been submitted.`
+        ? `Your invoice needs resubmission.`
+        : `Your invoice for ${period.label} has not been submitted.`
       : null;
+
+  const company = await db.query.companies.findFirst({
+    where: eq(companies.id, user.companyId),
+    columns: { name: true },
+  });
 
   return {
     period,
@@ -75,6 +85,9 @@ export async function getCurrentBillingState(user: AppUser) {
     canSubmit,
     warning,
     settings: settings ?? null,
+    profile: profileInput,
+    profileComplete,
+    companyName: company?.name ?? "Company",
   };
 }
 
@@ -93,21 +106,28 @@ export async function createBillingSubmission({
   user,
   userName,
   bodyContent,
-  files,
+  invoiceNumber,
+  lineItems,
 }: {
   user: AppUser;
   userName: string;
   bodyContent: string | null;
-  files: File[];
+  invoiceNumber: string;
+  lineItems: InvoiceLineItem[];
 }) {
-  if (!files.length) {
-    throw new Error("At least one file is required.");
-  }
+  const parsed = billingSubmissionCreateSchema.parse({
+    invoiceNumber,
+    lineItems,
+    bodyContent,
+  });
 
   const now = new Date();
   const current = await getCurrentBillingState(user);
+  if (!current.profileComplete || !current.profile) {
+    throw new Error("Complete your user billing information before submitting an invoice.");
+  }
   if (!current.canSubmit) {
-    throw new Error("Billing submission already exists for this week.");
+    throw new Error("Invoice submission already exists for this week.");
   }
 
   const settings = current.settings;
@@ -118,15 +138,18 @@ export async function createBillingSubmission({
   }
 
   const nextAttempt = (current.latestSubmission?.submissionAttemptNumber ?? 0) + 1;
-  const subject = buildBillingSubject(userName, current.period.periodStartDate, current.period.periodEndDate);
-  const submittedAtLocalLabel = formatSubmittedAtEasternLabel(now);
-
-  const storedFiles = await storeBillingFiles({
-    files,
-    companyId: user.companyId,
-    userId: user.id,
-    billingPeriodId: current.period.id,
+  const periodLabel = getBillingPeriodLabel(current.period.periodStartDate, current.period.periodEndDate);
+  const subject = buildInvoiceSubject({
+    userDisplayName: userName,
+    invoiceNumber: parsed.invoiceNumber,
+    periodLabel,
   });
+  const submittedAtLocalLabel = formatSubmittedAtEasternLabel(now);
+  const billingSnapshot: UserBillingSnapshot = {
+    ...current.profile,
+    userDisplayName: userName,
+    userEmail: user.email,
+  };
 
   const [submission] = await db
     .insert(billingSubmissions)
@@ -135,7 +158,10 @@ export async function createBillingSubmission({
       userId: user.id,
       billingPeriodId: current.period.id,
       subject,
-      bodyContent,
+      bodyContent: parsed.bodyContent ?? null,
+      invoiceNumber: parsed.invoiceNumber,
+      invoiceLineItemsJson: parsed.lineItems,
+      userBillingSnapshotJson: billingSnapshot,
       status: "submitted",
       submissionAttemptNumber: nextAttempt,
       submittedAtUtc: now,
@@ -146,39 +172,10 @@ export async function createBillingSubmission({
     })
     .returning();
 
-  await db.insert(billingSubmissionFiles).values(
-    storedFiles.map((file) => ({
-      billingSubmissionId: submission.id,
-      companyId: user.companyId,
-      userId: user.id,
-      originalFileName: file.originalFileName,
-      storedFileName: file.storedFileName,
-      fileMimeType: file.fileMimeType,
-      fileSizeBytes: file.fileSizeBytes,
-      storagePath: file.storagePath,
-      uploadedAtUtc: now,
-    })),
-  );
-
   const company = await db.query.companies.findFirst({
     where: eq(companies.id, user.companyId),
     columns: { name: true },
   });
-
-  const attachmentPayload = await Promise.all(
-    storedFiles.map(async (file) => {
-      const response = await fetch(file.storagePath);
-      if (!response.ok) {
-        throw new Error(`Failed reading uploaded file ${file.originalFileName}`);
-      }
-      const buffer = Buffer.from(await response.arrayBuffer());
-      return {
-        fileName: file.originalFileName,
-        content: buffer,
-        contentType: file.fileMimeType,
-      };
-    }),
-  );
 
   try {
     await sendBillingSubmissionEmail({
@@ -188,12 +185,14 @@ export async function createBillingSubmission({
       periodStart: current.period.periodStartDate,
       periodEnd: current.period.periodEndDate,
       submittedAt: now,
-      userBody: bodyContent,
+      userBody: parsed.bodyContent ?? null,
       defaultFooter: settings?.defaultBodyFooter ?? null,
       subject,
       to: toRecipients,
       cc: ccRecipients,
-      files: attachmentPayload,
+      invoiceNumber: parsed.invoiceNumber,
+      lineItems: parsed.lineItems,
+      billingSnapshot,
     });
 
     await db

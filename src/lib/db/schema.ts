@@ -100,6 +100,21 @@ export const users = pgTable("users", {
   companyIdx: index("users_company_idx").on(table.companyId),
 }));
 
+export const userBillingProfiles = pgTable("user_billing_profiles", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  address: varchar("address", { length: 255 }).notNull(),
+  address2: varchar("address_2", { length: 255 }),
+  city: varchar("city", { length: 120 }).notNull(),
+  state: varchar("state", { length: 120 }),
+  province: varchar("province", { length: 120 }),
+  zip: varchar("zip", { length: 32 }).notNull(),
+  phone: varchar("phone", { length: 50 }).notNull(),
+  paypalAddress: varchar("paypal_address", { length: 255 }).notNull(),
+  ...timestamps,
+});
+
 export const billingPeriods = pgTable(
   "billing_periods",
   {
@@ -138,6 +153,9 @@ export const billingSubmissions = pgTable(
       .references(() => billingPeriods.id, { onDelete: "cascade" }),
     subject: varchar("subject", { length: 255 }).notNull(),
     bodyContent: text("body_content"),
+    invoiceNumber: varchar("invoice_number", { length: 100 }),
+    invoiceLineItemsJson: jsonb("invoice_line_items_json"),
+    userBillingSnapshotJson: jsonb("user_billing_snapshot_json"),
     status: billingSubmissionStatusEnum("status").notNull().default("submitted"),
     submissionAttemptNumber: integer("submission_attempt_number").notNull().default(1),
     submittedAtUtc: timestamp("submitted_at_utc", { withTimezone: true }).notNull(),

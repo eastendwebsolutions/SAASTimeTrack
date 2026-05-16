@@ -1,4 +1,6 @@
 import { sendResendEmail } from "@/lib/services/email/resend";
+import type { InvoiceLineItem, UserBillingSnapshot } from "@/lib/validation/billing";
+import { buildInvoiceHtml } from "./invoice";
 import { formatSubmittedAtEasternLabel, getBillingPeriodLabel } from "./period";
 
 export async function sendBillingSubmissionEmail({
@@ -13,7 +15,9 @@ export async function sendBillingSubmissionEmail({
   subject,
   to,
   cc,
-  files,
+  invoiceNumber,
+  lineItems,
+  billingSnapshot,
 }: {
   userName: string;
   userEmail: string;
@@ -26,44 +30,32 @@ export async function sendBillingSubmissionEmail({
   subject: string;
   to: string[];
   cc: string[];
-  files: Array<{ fileName: string; content: Buffer; contentType: string }>;
+  invoiceNumber: string;
+  lineItems: InvoiceLineItem[];
+  billingSnapshot: UserBillingSnapshot;
 }) {
   const billingPeriod = getBillingPeriodLabel(periodStart, periodEnd);
   const submittedLabel = formatSubmittedAtEasternLabel(submittedAt);
-  const html = `
-    <div>
-      <p><strong>User:</strong> ${escapeHtml(userName)} (${escapeHtml(userEmail)})</p>
-      <p><strong>Company:</strong> ${escapeHtml(companyName)}</p>
-      <p><strong>Billing Period:</strong> ${escapeHtml(billingPeriod)}</p>
-      <p><strong>Submitted:</strong> ${escapeHtml(submittedLabel)}</p>
-      ${userBody ? `<p><strong>User Message:</strong><br/>${escapeHtml(userBody)}</p>` : ""}
-      <p><strong>Attached Files:</strong></p>
-      <ul>
-        ${files.map((file) => `<li>${escapeHtml(file.fileName)}</li>`).join("")}
-      </ul>
-      ${defaultFooter ? `<hr/><p>${escapeHtml(defaultFooter)}</p>` : ""}
-    </div>
-  `;
+  const html = buildInvoiceHtml({
+    invoiceNumber,
+    periodLabel: billingPeriod,
+    submittedLabel,
+    companyName,
+    billingSnapshot: {
+      ...billingSnapshot,
+      userDisplayName: userName,
+      userEmail,
+    },
+    lineItems,
+    userBody,
+    defaultFooter,
+  });
 
   return sendResendEmail({
     to,
     cc,
     subject,
     html,
-    attachments: files.map((file) => ({
-      filename: file.fileName,
-      content: file.content,
-      contentType: file.contentType,
-    })),
+    attachments: [],
   });
 }
-
-function escapeHtml(input: string) {
-  return input
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-

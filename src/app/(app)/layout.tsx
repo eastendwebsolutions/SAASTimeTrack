@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getOrCreateCurrentUser } from "@/lib/auth/current-user";
-import { canReviewEntries, isSuperAdmin } from "@/lib/auth/rbac";
+import { canManageCompanySettings, canReviewEntries, isSuperAdmin } from "@/lib/auth/rbac";
 import { requiresPersonalIntegration } from "@/lib/auth/integration-requirements";
 import { TimezoneSync } from "@/components/providers/timezone-sync";
 import { AppHeader } from "@/components/layout/app-header";
@@ -53,6 +53,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       })
     : null;
   const canSeeAdmin = Boolean(user && canReviewEntries(user.role));
+  const canManageBilling = Boolean(user && canManageCompanySettings(user.role));
   const canSeePokerPlanning = Boolean(user);
   const appHomeHref =
     user?.role === "user" || (user && isSuperAdmin(user.role)) ? "/dashboard" : "/time";
@@ -73,7 +74,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const navItems = [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/time", label: "Time" },
-    { href: "/billing", label: "Billing" },
     { href: "/reports", label: "Reports" },
     ...(canSeePokerPlanning ? [{ href: "/poker-planning", label: "Poker" }] : []),
     ...(canSeeAdmin ? [{ href: "/admin/review", label: "Admin" }] : []),
@@ -84,6 +84,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/timesheet/archive", label: "Archive" },
   ];
 
+  const billingItems = [
+    { href: "/billing/user-settings", label: "User Billing Information" },
+    { href: "/billing/invoicing", label: "Invoicing" },
+    ...(canManageBilling
+      ? [
+          { href: "/admin/billing/settings", label: "Company Billing Settings" },
+          { href: "/admin/billing/submissions", label: "Invoice Submissions" },
+        ]
+      : []),
+  ];
+
   return (
     <div className="min-h-screen">
       <TimezoneSync currentTimezone={user?.timezone ?? null} />
@@ -91,6 +102,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         appHomeHref={appHomeHref}
         navItems={navItems}
         timesheetItems={timesheetItems}
+        billingItems={billingItems}
         canSeeAdmin={canSeeAdmin}
         integration={{
           provider: activeProvider,

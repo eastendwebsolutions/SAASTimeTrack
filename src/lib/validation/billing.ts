@@ -11,6 +11,54 @@ export const BILLING_ALLOWED_MIME_TYPES = new Set([
   "text/plain",
 ]);
 
+export function sanitizeFileName(fileName: string): string {
+  return fileName
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/_+/g, "_")
+    .slice(0, 180);
+}
+
+export function getFileExtension(fileName: string): string {
+  const idx = fileName.lastIndexOf(".");
+  if (idx < 0) return "";
+  return fileName.slice(idx).toLowerCase();
+}
+
+export const invoiceLineItemSchema = z.object({
+  description: z.string().trim().min(1, "Line item description is required.").max(500),
+  amount: z.number().positive("Amount must be greater than zero.").max(10_000_000),
+});
+
+export const billingSubmissionCreateSchema = z.object({
+  invoiceNumber: z.string().trim().min(1, "Invoice number is required.").max(100),
+  lineItems: z.array(invoiceLineItemSchema).min(1, "At least one line item is required.").max(50),
+  bodyContent: z.string().max(5000).optional().nullable(),
+});
+
+export const userBillingProfileSchema = z
+  .object({
+    address: z.string().trim().min(1, "Address is required.").max(255),
+    address2: z.string().trim().max(255).optional().nullable(),
+    city: z.string().trim().min(1, "City is required.").max(120),
+    state: z.string().trim().max(120).optional().nullable(),
+    province: z.string().trim().max(120).optional().nullable(),
+    zip: z.string().trim().min(1, "Zip is required.").max(32),
+    phone: z.string().trim().min(1, "Phone is required.").max(50),
+    paypalAddress: z.string().trim().min(1, "PayPal address is required.").max(255),
+  })
+  .refine((data) => Boolean(data.state?.trim() || data.province?.trim()), {
+    message: "State or province is required.",
+    path: ["state"],
+  });
+
+export type InvoiceLineItem = z.infer<typeof invoiceLineItemSchema>;
+export type UserBillingProfileInput = z.infer<typeof userBillingProfileSchema>;
+
+export type UserBillingSnapshot = UserBillingProfileInput & {
+  userDisplayName: string;
+  userEmail: string;
+};
+
 export const billingSettingsSchema = z.object({
   companyId: z.string().uuid().optional(),
   toRecipients: z.array(z.email()).min(1, "At least one TO recipient is required."),
@@ -31,17 +79,3 @@ export const adminBillingStatusUpdateSchema = z.object({
   requestedCorrection: z.string().max(5000).optional().nullable(),
   dueDateUtcIso: z.string().datetime().optional().nullable(),
 });
-
-export function sanitizeFileName(fileName: string): string {
-  return fileName
-    .replace(/[^a-zA-Z0-9._-]/g, "_")
-    .replace(/_+/g, "_")
-    .slice(0, 180);
-}
-
-export function getFileExtension(fileName: string): string {
-  const idx = fileName.lastIndexOf(".");
-  if (idx < 0) return "";
-  return fileName.slice(idx).toLowerCase();
-}
-

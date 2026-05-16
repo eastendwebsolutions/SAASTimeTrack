@@ -91,7 +91,7 @@ export function BillingSettingsClient({ isSuperAdmin }: { isSuperAdmin: boolean 
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Billing Settings</h1>
+      <h1 className="text-2xl font-semibold">Company Billing Settings</h1>
       {error ? <Card className="border-rose-600/50 bg-rose-900/20 p-4 text-rose-200">{error}</Card> : null}
       <Card className="space-y-4 p-5">
         {isSuperAdmin ? (

@@ -1,20 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { formatInvoiceCurrency, sumInvoiceLineItems } from "@/lib/services/billing/invoice";
+import type { InvoiceLineItem, UserBillingSnapshot } from "@/lib/validation/billing";
 
 type SubmissionRow = {
   id: string;
   companyId: string;
   userId: string;
   subject: string;
+  invoiceNumber: string | null;
   status: "submitted" | "accepted" | "needs_resubmission" | "failed";
   emailStatus: "pending" | "sent" | "failed";
   submissionAttemptNumber: number;
   submittedAtUtc: string;
   bodyContent: string | null;
   adminNote: string | null;
+  invoiceLineItemsJson: InvoiceLineItem[] | null;
+  userBillingSnapshotJson: UserBillingSnapshot | null;
   files: Array<{ id: string; originalFileName: string }>;
 };
 type CompanyOption = { id: string; name: string };
@@ -35,14 +40,13 @@ export function BillingAdminSubmissionsClient({ isSuperAdmin, companyId }: { isS
     const res = await fetch(`/api/admin/billing/submissions?${params.toString()}`);
     const json = await res.json();
     if (!res.ok) {
-      setError(json.error ?? "Unable to load billing submissions");
+      setError(json.error ?? "Unable to load invoice submissions");
       return;
     }
     setRows(Array.isArray(json) ? json : []);
   }, [companyFilter, statusFilter]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 
@@ -77,11 +81,6 @@ export function BillingAdminSubmissionsClient({ isSuperAdmin, companyId }: { isS
     await load();
   }
 
-  const selectedFilesUrlBase = useMemo(() => {
-    if (!selected) return "";
-    return `/api/admin/billing/submissions/${selected.id}/files`;
-  }, [selected]);
-
   function badgeClass(status: string) {
     if (status === "accepted") return "bg-emerald-500/20 text-emerald-300";
     if (status === "submitted") return "bg-sky-500/20 text-sky-300";
@@ -91,7 +90,7 @@ export function BillingAdminSubmissionsClient({ isSuperAdmin, companyId }: { isS
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Billing Submissions</h1>
+      <h1 className="text-2xl font-semibold">Invoice Submissions</h1>
       {error ? <Card className="border-rose-600/50 bg-rose-900/20 p-4 text-rose-200">{error}</Card> : null}
 
       <Card className="flex flex-wrap items-end gap-3 p-4">
@@ -124,7 +123,8 @@ export function BillingAdminSubmissionsClient({ isSuperAdmin, companyId }: { isS
           <thead className="bg-zinc-900/70 text-left text-zinc-400">
             <tr>
               <th className="px-3 py-2">Submitted</th>
-              <th className="px-3 py-2">Subject</th>
+              <th className="px-3 py-2">Invoice #</th>
+              <th className="px-3 py-2">Total</th>
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2">Email</th>
               <th className="px-3 py-2">Attempt</th>
@@ -132,22 +132,27 @@ export function BillingAdminSubmissionsClient({ isSuperAdmin, companyId }: { isS
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className="border-t border-zinc-800">
-                <td className="px-3 py-2 text-zinc-300">{new Date(row.submittedAtUtc).toLocaleString("en-US")}</td>
-                <td className="px-3 py-2 text-zinc-100">{row.subject}</td>
-                <td className="px-3 py-2">
-                  <span className={`rounded px-2 py-1 text-xs capitalize ${badgeClass(row.status)}`}>{row.status.replaceAll("_", " ")}</span>
-                </td>
-                <td className="px-3 py-2 capitalize text-zinc-300">{row.emailStatus}</td>
-                <td className="px-3 py-2 text-zinc-300">{row.submissionAttemptNumber}</td>
-                <td className="px-3 py-2">
-                  <Button variant="secondary" onClick={() => setSelected(row)}>
-                    Review
-                  </Button>
-                </td>
-              </tr>
-            ))}
+            {rows.map((row) => {
+              const items = Array.isArray(row.invoiceLineItemsJson) ? row.invoiceLineItemsJson : [];
+              const total = items.length ? sumInvoiceLineItems(items) : null;
+              return (
+                <tr key={row.id} className="border-t border-zinc-800">
+                  <td className="px-3 py-2 text-zinc-300">{new Date(row.submittedAtUtc).toLocaleString("en-US")}</td>
+                  <td className="px-3 py-2 text-zinc-100">{row.invoiceNumber ?? "—"}</td>
+                  <td className="px-3 py-2 text-zinc-300">{total !== null ? formatInvoiceCurrency(total) : "—"}</td>
+                  <td className="px-3 py-2">
+                    <span className={`rounded px-2 py-1 text-xs capitalize ${badgeClass(row.status)}`}>{row.status.replaceAll("_", " ")}</span>
+                  </td>
+                  <td className="px-3 py-2 capitalize text-zinc-300">{row.emailStatus}</td>
+                  <td className="px-3 py-2 text-zinc-300">{row.submissionAttemptNumber}</td>
+                  <td className="px-3 py-2">
+                    <Button variant="secondary" onClick={() => setSelected(row)}>
+                      Review
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </Card>
@@ -160,24 +165,44 @@ export function BillingAdminSubmissionsClient({ isSuperAdmin, companyId }: { isS
               Close
             </button>
           </div>
-          <p className="text-sm text-zinc-300">{selected.subject}</p>
-          {selected.bodyContent ? <p className="text-sm text-zinc-400">User Message: {selected.bodyContent}</p> : null}
-          {selected.adminNote ? <p className="text-sm text-amber-300">Admin Note: {selected.adminNote}</p> : null}
-          <p className="text-xs text-zinc-500">
-            Files
+          <p className="text-sm text-zinc-300">
+            Invoice #{selected.invoiceNumber ?? "N/A"} — {selected.subject}
           </p>
-          {selected.files.length ? (
+          {selected.userBillingSnapshotJson ? (
+            <div className="rounded border border-zinc-800 p-3 text-sm text-zinc-300">
+              <p className="font-medium text-zinc-100">{selected.userBillingSnapshotJson.userDisplayName}</p>
+              <p>{selected.userBillingSnapshotJson.userEmail}</p>
+              <p className="mt-2">
+                {selected.userBillingSnapshotJson.address}
+                {selected.userBillingSnapshotJson.address2 ? `, ${selected.userBillingSnapshotJson.address2}` : ""}
+              </p>
+              <p>
+                {selected.userBillingSnapshotJson.city}, {selected.userBillingSnapshotJson.state || selected.userBillingSnapshotJson.province}{" "}
+                {selected.userBillingSnapshotJson.zip}
+              </p>
+              <p>Phone: {selected.userBillingSnapshotJson.phone}</p>
+              <p>PayPal: {selected.userBillingSnapshotJson.paypalAddress}</p>
+            </div>
+          ) : null}
+          {selected.bodyContent ? <p className="text-sm text-zinc-400">Notes: {selected.bodyContent}</p> : null}
+          {selected.adminNote ? <p className="text-sm text-amber-300">Admin Note: {selected.adminNote}</p> : null}
+          {Array.isArray(selected.invoiceLineItemsJson) && selected.invoiceLineItemsJson.length ? (
             <ul className="space-y-1 text-sm text-zinc-300">
-              {selected.files.map((file) => (
-                <li key={file.id}>
-                  <a className="text-indigo-300 hover:text-indigo-200" href={`${selectedFilesUrlBase}/${file.id}`}>
-                    {file.originalFileName}
-                  </a>
+              {selected.invoiceLineItemsJson.map((item, index) => (
+                <li key={`${selected.id}-line-${index}`} className="flex justify-between gap-4">
+                  <span>{item.description}</span>
+                  <span>{formatInvoiceCurrency(item.amount)}</span>
                 </li>
               ))}
+              <li className="flex justify-between gap-4 border-t border-zinc-800 pt-2 font-medium">
+                <span>Total</span>
+                <span>{formatInvoiceCurrency(sumInvoiceLineItems(selected.invoiceLineItemsJson))}</span>
+              </li>
             </ul>
+          ) : selected.files.length ? (
+            <p className="text-xs text-zinc-500">Legacy file upload: {selected.files.map((file) => file.originalFileName).join(", ")}</p>
           ) : (
-            <p className="text-xs text-zinc-500">No files found for this submission.</p>
+            <p className="text-xs text-zinc-500">No line items recorded.</p>
           )}
           <textarea
             value={adminNote}
@@ -197,4 +222,3 @@ export function BillingAdminSubmissionsClient({ isSuperAdmin, companyId }: { isS
     </div>
   );
 }
-

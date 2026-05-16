@@ -1,0 +1,16 @@
+---
+description: Auto-commit and deploy after code edits unless the user opts out
+alwaysApply: true
+---
+
+# Auto commit and deploy
+
+When you make code changes in this project, unless the user explicitly says not to (e.g. "don't commit", "no deploy", "local only"):
+
+1. **Commit** — Stage relevant changes and create a git commit with a clear message describing why.
+2. **Deploy** — Run production deploy (`npm run deploy:vercel` or `npx vercel --prod --yes`) after the commit.
+3. **Database** — If the change includes new Drizzle migrations, run `npm run db:push` against production env before or immediately after deploy so the app matches the schema.
+
+Do not skip commit/deploy silently. If commit or deploy fails, report the error and what was fixed or what the user should do.
+
+Do not force-push to main/master. Do not amend unless the user requested it and amend rules are satisfied.
