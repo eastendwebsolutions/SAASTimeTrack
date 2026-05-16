@@ -1,14 +1,15 @@
 import { sql } from "@vercel/postgres";
-import { getEnv } from "@/lib/env";
 
 function hasMondayEnvConfigured() {
-  const env = getEnv();
-  return Boolean(env.MONDAY_CLIENT_ID && env.MONDAY_CLIENT_SECRET && env.MONDAY_REDIRECT_URI);
+  return Boolean(
+    process.env.MONDAY_CLIENT_ID?.trim() &&
+      process.env.MONDAY_CLIENT_SECRET?.trim() &&
+      process.env.MONDAY_REDIRECT_URI?.trim(),
+  );
 }
 
 function isMondayFeatureEnabled() {
-  const env = getEnv();
-  return env.MONDAY_FEATURE_ENABLED === "1";
+  return process.env.MONDAY_FEATURE_ENABLED === "1";
 }
 
 async function hasMondaySchemaReady() {

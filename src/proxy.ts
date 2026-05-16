@@ -35,6 +35,10 @@ function isIntegrationOAuthBypass(pathname: string): boolean {
     return true;
   }
 
+  if (pathname === "/settings/integrations" || pathname.startsWith("/settings/integrations/")) {
+    return true;
+  }
+
   const oauthPaths = new Set([
     "/api/asana/connect/url",
     "/api/asana/callback",

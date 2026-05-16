@@ -1,14 +1,15 @@
 import { sql } from "@vercel/postgres";
-import { getEnv } from "@/lib/env";
 
 function hasJiraEnvConfigured() {
-  const env = getEnv();
-  return Boolean(env.JIRA_CLIENT_ID && env.JIRA_CLIENT_SECRET && env.JIRA_REDIRECT_URI);
+  return Boolean(
+    process.env.JIRA_CLIENT_ID?.trim() &&
+      process.env.JIRA_CLIENT_SECRET?.trim() &&
+      process.env.JIRA_REDIRECT_URI?.trim(),
+  );
 }
 
 function isJiraFeatureEnabled() {
-  const env = getEnv();
-  return env.JIRA_FEATURE_ENABLED === "1";
+  return process.env.JIRA_FEATURE_ENABLED === "1";
 }
 
 async function hasJiraSchemaReady() {

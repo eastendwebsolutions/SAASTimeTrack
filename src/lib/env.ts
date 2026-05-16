@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+/** Optional email env vars: empty/invalid values become undefined so one bad var cannot 500 the app. */
+export function parseOptionalEmailEnv(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  const trimmed = String(value).trim();
+  if (!trimmed) return undefined;
+  const parsed = z.string().email().safeParse(trimmed);
+  return parsed.success ? parsed.data : undefined;
+}
+
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),
@@ -18,8 +27,8 @@ const envSchema = z.object({
   MONDAY_FEATURE_ENABLED: z.enum(["0", "1"]).optional(),
   ENCRYPTION_KEY: z.string().min(32),
   RESEND_API_KEY: z.string().optional(),
-  BILLING_FROM_EMAIL: z.email().optional(),
-  TEAM_STATUS_FROM_EMAIL: z.email().optional(),
+  BILLING_FROM_EMAIL: z.string().email().optional(),
+  TEAM_STATUS_FROM_EMAIL: z.string().email().optional(),
   BILLING_MAX_FILE_SIZE_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024),
 });
 
@@ -49,8 +58,8 @@ export function getEnv(): Env {
     MONDAY_FEATURE_ENABLED: process.env.MONDAY_FEATURE_ENABLED,
     ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
-    BILLING_FROM_EMAIL: process.env.BILLING_FROM_EMAIL,
-    TEAM_STATUS_FROM_EMAIL: process.env.TEAM_STATUS_FROM_EMAIL,
+    BILLING_FROM_EMAIL: parseOptionalEmailEnv(process.env.BILLING_FROM_EMAIL),
+    TEAM_STATUS_FROM_EMAIL: parseOptionalEmailEnv(process.env.TEAM_STATUS_FROM_EMAIL),
     BILLING_MAX_FILE_SIZE_BYTES: process.env.BILLING_MAX_FILE_SIZE_BYTES,
   });
 
