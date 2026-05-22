@@ -143,7 +143,9 @@ export async function createBillingSubmission({
   const ccFromSettings = (settings?.ccRecipientsJson as string[] | undefined) ?? [];
   const bccFromSettings = (settings?.bccRecipientsJson as string[] | undefined) ?? [];
   if (!toFromSettings.length) {
-    throw new Error("Billing recipients are not configured for your company.");
+    throw new Error(
+      "Billing recipients are not configured for your company. A company admin must add at least one TO recipient in Company Billing Settings before invoices can be submitted.",
+    );
   }
 
   const { to: toRecipients, cc: ccRecipients, bcc: bccRecipients } = buildSubmissionEmailRecipients({

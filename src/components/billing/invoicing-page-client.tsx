@@ -156,7 +156,8 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
 
   const formValidationError = getFormValidationError(invoiceNumber, lineItems);
   const submitBlockedReason = getSubmitBlockedReason(current);
-  const isFormReady = Boolean(billingSnapshot && current?.profileComplete && !formValidationError);
+  const billingRecipientsConfigured = Boolean(current?.billToRecipients?.length);
+  const isFormReady = Boolean(billingSnapshot && current?.profileComplete && billingRecipientsConfigured && !formValidationError);
   const canSubmitNow = Boolean(showPreview && isFormReady && current?.canSubmit && !submitting);
 
   function updateLineItem(id: string, patch: Partial<LineItemDraft>) {
@@ -255,6 +256,15 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
 
       {current?.warning ? (
         <Card className="border-amber-600/50 bg-amber-900/20 p-4 text-amber-200">{current.warning}</Card>
+      ) : null}
+      {!current?.billToRecipients?.length ? (
+        <Card className="border-amber-600/50 bg-amber-900/20 p-4 text-amber-200">
+          Invoice email recipients are not configured for your company. A company admin must open{" "}
+          <Link href="/admin/billing/settings" className="underline">
+            Company Billing Settings
+          </Link>{" "}
+          and add at least one TO recipient (the Bill To address on invoices) before you can submit.
+        </Card>
       ) : null}
       {error ? <Card className="border-rose-600/50 bg-rose-900/20 p-4 text-rose-200">{error}</Card> : null}
 
