@@ -24,6 +24,7 @@ export async function PUT(request: Request) {
     const body = await request.json();
     const parsed = userBillingProfileSchema.parse({
       ...body,
+      state: typeof body?.state === "string" ? body.state.trim() : "",
       address2: typeof body?.address2 === "string" && body.address2.trim() ? body.address2.trim() : null,
       province: typeof body?.province === "string" && body.province.trim() ? body.province.trim() : null,
     });

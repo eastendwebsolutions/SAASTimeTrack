@@ -43,8 +43,18 @@ export function formatBillToLines(billToRecipients: string[]) {
   return billToRecipients;
 }
 
+export function formatCityRegionZip(snapshot: {
+  city: string;
+  state?: string | null;
+  province?: string | null;
+  zip: string;
+}) {
+  const region = [snapshot.state?.trim(), snapshot.province?.trim()].filter(Boolean).join(", ");
+  return [snapshot.city, region || null, snapshot.zip].filter(Boolean).join(", ");
+}
+
 function formatAddress(snapshot: UserBillingSnapshot) {
-  const cityLine = [snapshot.city, snapshot.state?.trim() || snapshot.province?.trim(), snapshot.zip].filter(Boolean).join(", ");
+  const cityLine = formatCityRegionZip(snapshot);
   const lines = [
     formatInvoiceBillFromName(snapshot),
     snapshot.userEmail,

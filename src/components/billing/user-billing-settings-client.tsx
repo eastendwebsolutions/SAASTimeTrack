@@ -200,16 +200,15 @@ export function UserBillingSettingsClient() {
           />
         </label>
         <label className="space-y-1 text-sm text-zinc-300">
-          <RequiredLabel>State</RequiredLabel>
+          State (US)
           <select
-            required
             value={profile.state}
             onChange={(event) => updateField("state", event.target.value)}
             className={selectClassName}
           >
-            <option value="">Select state</option>
+            <option value="">Select U.S. state (optional)</option>
             {profile.state && !isKnownState(profile.state) ? (
-              <option value={profile.state}>{profile.state} (update required)</option>
+              <option value={profile.state}>{profile.state}</option>
             ) : null}
             {US_STATE_OPTIONS.map((state) => (
               <option key={state} value={state}>
@@ -219,10 +218,11 @@ export function UserBillingSettingsClient() {
           </select>
         </label>
         <label className="space-y-1 text-sm text-zinc-300">
-          Province
+          State (other)
           <input
             value={profile.province ?? ""}
             onChange={(event) => updateField("province", event.target.value)}
+            placeholder="Region / province outside the U.S."
             className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-sm text-zinc-200"
           />
         </label>

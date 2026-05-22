@@ -1,6 +1,12 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { InvoiceLineItem, UserBillingSnapshot } from "@/lib/validation/billing";
-import { formatBillToLines, formatInvoiceBillFromName, formatInvoiceCurrency, sumInvoiceLineItems } from "./invoice";
+import {
+  formatBillToLines,
+  formatCityRegionZip,
+  formatInvoiceBillFromName,
+  formatInvoiceCurrency,
+  sumInvoiceLineItems,
+} from "./invoice";
 
 const PAGE_WIDTH = 612;
 const PAGE_HEIGHT = 792;
@@ -56,9 +62,7 @@ function drawLines(
 }
 
 function billFromLines(snapshot: UserBillingSnapshot) {
-  const cityLine = [snapshot.city, snapshot.state?.trim() || snapshot.province?.trim(), snapshot.zip]
-    .filter(Boolean)
-    .join(", ");
+  const cityLine = formatCityRegionZip(snapshot);
   return [
     formatInvoiceBillFromName(snapshot),
     snapshot.userEmail,

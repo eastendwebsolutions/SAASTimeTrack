@@ -45,8 +45,8 @@ export const userBillingProfileSchema = z.object({
   state: z
     .string()
     .trim()
-    .min(1, "State is required.")
-    .refine((value) => US_STATE_VALUE_SET.has(value), { message: "Select a valid U.S. state." }),
+    .max(120)
+    .refine((value) => !value || US_STATE_VALUE_SET.has(value), { message: "Select a valid U.S. state." }),
   province: z.string().trim().max(120).optional().nullable(),
   zip: z.string().trim().min(1, "Zip is required.").max(32),
   country: z
@@ -63,7 +63,6 @@ export const REQUIRED_USER_BILLING_FIELD_LABELS = [
   "Last name",
   "Address",
   "City",
-  "State",
   "Zip",
   "Country",
   "Phone",
