@@ -12,7 +12,8 @@ const sampleSnapshot = {
   zip: "11940",
   country: "United States",
   phone: "516-901-2681",
-  paypalAddress: "test@example.com",
+  paymentAccountType: "PayPal",
+  paymentAccountAddress: "test@example.com",
   userDisplayName: "Bryan Spano",
   userEmail: "bryan@example.com",
 };

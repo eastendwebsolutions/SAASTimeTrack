@@ -29,7 +29,8 @@ export async function upsertUserBillingProfile(userId: string, input: UserBillin
       zip: input.zip,
       country: input.country,
       phone: input.phone,
-      paypalAddress: input.paypalAddress,
+      paymentAccountType: input.paymentAccountType,
+      paymentAccountAddress: input.paymentAccountAddress,
     })
     .onConflictDoUpdate({
       target: userBillingProfiles.userId,
@@ -44,7 +45,8 @@ export async function upsertUserBillingProfile(userId: string, input: UserBillin
         zip: input.zip,
         country: input.country,
         phone: input.phone,
-        paypalAddress: input.paypalAddress,
+        paymentAccountType: input.paymentAccountType,
+        paymentAccountAddress: input.paymentAccountAddress,
         updatedAt: sql`now()`,
       },
     })
@@ -69,7 +71,8 @@ export function toUserBillingProfileInput(
     zip: string;
     country: string;
     phone: string;
-    paypalAddress: string;
+    paymentAccountType: string;
+    paymentAccountAddress: string;
   } | null | undefined,
 ): UserBillingProfileInput | null {
   if (!profile) return null;
@@ -84,6 +87,7 @@ export function toUserBillingProfileInput(
     zip: profile.zip,
     country: profile.country,
     phone: profile.phone,
-    paypalAddress: profile.paypalAddress,
+    paymentAccountType: profile.paymentAccountType,
+    paymentAccountAddress: profile.paymentAccountAddress,
   };
 }

@@ -27,6 +27,16 @@ export async function PUT(request: Request) {
       state: typeof body?.state === "string" ? body.state.trim() : "",
       address2: typeof body?.address2 === "string" && body.address2.trim() ? body.address2.trim() : null,
       province: typeof body?.province === "string" && body.province.trim() ? body.province.trim() : null,
+      paymentAccountType:
+        typeof body?.paymentAccountType === "string" && body.paymentAccountType.trim()
+          ? body.paymentAccountType.trim()
+          : "PayPal",
+      paymentAccountAddress:
+        typeof body?.paymentAccountAddress === "string"
+          ? body.paymentAccountAddress.trim()
+          : typeof body?.paypalAddress === "string"
+            ? body.paypalAddress.trim()
+            : "",
     });
     const profile = await upsertUserBillingProfile(user.id, parsed);
     if (!profile) {

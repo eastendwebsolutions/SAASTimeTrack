@@ -115,7 +115,8 @@ export const userBillingProfiles = pgTable("user_billing_profiles", {
   zip: varchar("zip", { length: 32 }).notNull(),
   country: varchar("country", { length: 120 }).notNull(),
   phone: varchar("phone", { length: 50 }).notNull(),
-  paypalAddress: varchar("paypal_address", { length: 255 }).notNull(),
+  paymentAccountType: varchar("payment_account_type", { length: 32 }).notNull().default("PayPal"),
+  paymentAccountAddress: varchar("payment_account_address", { length: 255 }).notNull(),
   ...timestamps,
 });
 

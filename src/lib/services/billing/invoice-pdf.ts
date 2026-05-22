@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { InvoiceLineItem, UserBillingSnapshot } from "@/lib/validation/billing";
+import { formatPaymentAccountLine } from "@/lib/constants/payment-account-options";
 import {
   formatBillToLines,
   formatCityRegionZip,
@@ -71,7 +72,7 @@ function billFromLines(snapshot: UserBillingSnapshot) {
     cityLine,
     snapshot.country,
     snapshot.phone ? `Phone: ${snapshot.phone}` : null,
-    snapshot.paypalAddress ? `PayPal: ${snapshot.paypalAddress}` : null,
+    formatPaymentAccountLine(snapshot.paymentAccountType, snapshot.paymentAccountAddress),
   ].filter((line): line is string => Boolean(line));
 }
 

@@ -1,3 +1,4 @@
+import { formatPaymentAccountLine } from "@/lib/constants/payment-account-options";
 import type { InvoiceLineItem, UserBillingSnapshot } from "@/lib/validation/billing";
 
 export function formatInvoiceCurrency(amount: number) {
@@ -63,7 +64,7 @@ function formatAddress(snapshot: UserBillingSnapshot) {
     cityLine,
     snapshot.country,
     snapshot.phone ? `Phone: ${snapshot.phone}` : null,
-    snapshot.paypalAddress ? `PayPal: ${snapshot.paypalAddress}` : null,
+    formatPaymentAccountLine(snapshot.paymentAccountType, snapshot.paymentAccountAddress),
   ].filter(Boolean);
 
   return lines.map((line) => escapeHtml(line ?? "")).join("<br/>");

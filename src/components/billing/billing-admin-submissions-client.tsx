@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { formatPaymentAccountLineFromSnapshot } from "@/lib/constants/payment-account-options";
 import { formatInvoiceCurrency, sumInvoiceLineItems } from "@/lib/services/billing/invoice";
 import type { InvoiceLineItem, UserBillingSnapshot } from "@/lib/validation/billing";
 
@@ -186,7 +187,10 @@ export function BillingAdminSubmissionsClient({ isSuperAdmin, companyId }: { isS
               </p>
               {selected.userBillingSnapshotJson.country ? <p>{selected.userBillingSnapshotJson.country}</p> : null}
               <p>Phone: {selected.userBillingSnapshotJson.phone}</p>
-              <p>PayPal: {selected.userBillingSnapshotJson.paypalAddress}</p>
+              <p>
+                {formatPaymentAccountLineFromSnapshot(selected.userBillingSnapshotJson) ??
+                  "Payment account not recorded"}
+              </p>
             </div>
           ) : null}
           {selected.bodyContent ? <p className="text-sm text-zinc-400">Notes: {selected.bodyContent}</p> : null}

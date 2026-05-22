@@ -11,6 +11,7 @@ import {
   US_STATE_OPTIONS,
 } from "@/lib/constants/geo-options";
 import { parseJsonResponse } from "@/lib/api/parse-json-response";
+import { PAYMENT_ACCOUNT_TYPE_OPTIONS } from "@/lib/constants/payment-account-options";
 import {
   REQUIRED_USER_BILLING_FIELD_LABELS,
   userBillingProfileSchema,
@@ -38,7 +39,8 @@ const emptyProfile: UserBillingProfileInput = {
   zip: "",
   country: "",
   phone: "",
-  paypalAddress: "",
+  paymentAccountType: "PayPal",
+  paymentAccountAddress: "",
 };
 
 function RequiredLabel({ children }: { children: React.ReactNode }) {
@@ -272,12 +274,28 @@ export function UserBillingSettingsClient() {
             className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-sm text-zinc-200"
           />
         </label>
-        <label className="space-y-1 text-sm text-zinc-300 sm:col-span-2">
-          <RequiredLabel>PayPal Address</RequiredLabel>
+        <label className="space-y-1 text-sm text-zinc-300">
+          <RequiredLabel>Payment Account Type</RequiredLabel>
+          <select
+            required
+            value={profile.paymentAccountType}
+            onChange={(event) => updateField("paymentAccountType", event.target.value)}
+            className={selectClassName}
+          >
+            {PAYMENT_ACCOUNT_TYPE_OPTIONS.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-1 text-sm text-zinc-300">
+          <RequiredLabel>Payment Account Address</RequiredLabel>
           <input
             required
-            value={profile.paypalAddress}
-            onChange={(event) => updateField("paypalAddress", event.target.value)}
+            value={profile.paymentAccountAddress}
+            onChange={(event) => updateField("paymentAccountAddress", event.target.value)}
+            placeholder="Email, phone, or account ID for payouts"
             className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-sm text-zinc-200"
           />
         </label>

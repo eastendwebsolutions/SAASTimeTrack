@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { COUNTRY_VALUE_SET, US_STATE_VALUE_SET } from "@/lib/constants/geo-options";
+import { PAYMENT_ACCOUNT_TYPE_OPTIONS, PAYMENT_ACCOUNT_TYPE_SET } from "@/lib/constants/payment-account-options";
 
 export const BILLING_TIMEZONE = "America/New_York";
 export const BILLING_ALLOWED_EXTENSIONS = [".pdf", ".docx", ".xlsx", ".csv"] as const;
@@ -55,7 +56,12 @@ export const userBillingProfileSchema = z.object({
     .min(1, "Country is required.")
     .refine((value) => COUNTRY_VALUE_SET.has(value), { message: "Select a valid country." }),
   phone: z.string().trim().min(1, "Phone is required.").max(50),
-  paypalAddress: z.string().trim().min(1, "PayPal address is required.").max(255),
+  paymentAccountType: z
+    .string()
+    .trim()
+    .min(1, "Payment account type is required.")
+    .refine((value) => PAYMENT_ACCOUNT_TYPE_SET.has(value), { message: "Select a valid payment account type." }),
+  paymentAccountAddress: z.string().trim().min(1, "Payment account address is required.").max(255),
 });
 
 export const REQUIRED_USER_BILLING_FIELD_LABELS = [
@@ -66,7 +72,8 @@ export const REQUIRED_USER_BILLING_FIELD_LABELS = [
   "Zip",
   "Country",
   "Phone",
-  "PayPal address",
+  "Payment account type",
+  "Payment account address",
 ] as const;
 
 export type InvoiceLineItem = z.infer<typeof invoiceLineItemSchema>;
