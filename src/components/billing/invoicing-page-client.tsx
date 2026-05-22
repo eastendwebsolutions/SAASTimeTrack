@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { EmailRecipientTags } from "@/components/billing/email-recipient-tags";
 import { InvoicePreview } from "@/components/billing/invoice-preview";
 import { formatInvoiceCurrency, sumInvoiceLineItems } from "@/lib/services/billing/invoice";
 import {
@@ -32,6 +33,12 @@ type BillingCurrentResponse = {
     defaultBodyFooter: string | null;
   };
   billToRecipients: string[];
+  submitterEmail: string;
+  emailRecipients: {
+    to: string[];
+    cc: string[];
+    bcc: string[];
+  };
 };
 
 type HistoryRow = {
@@ -270,6 +277,20 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
 
       <Card className="space-y-4 p-5">
         <h2 className="text-lg font-medium">Submit Invoice</h2>
+
+        {current?.emailRecipients ? (
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
+            <p className="mb-1 text-sm font-medium text-zinc-200">Invoice email recipients</p>
+            <p className="mb-3 text-xs text-zinc-500">You will always receive a copy of your submission at the address below.</p>
+            <EmailRecipientTags
+              to={current.emailRecipients.to}
+              cc={current.emailRecipients.cc}
+              bcc={current.emailRecipients.bcc}
+              submitterEmail={userEmail}
+            />
+          </div>
+        ) : null}
+
         <label className="space-y-1 text-sm text-zinc-300">
           Invoice Number
           <input

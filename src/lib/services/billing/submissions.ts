@@ -13,6 +13,7 @@ import { listWorkspaceOptionsForSuperAdmin } from "@/lib/services/workspace-opti
 import { resolveWorkspaceScopedCompanyIdsForSuperAdmin } from "@/lib/services/workspace-options";
 import { formatSubmittedAtEasternLabel, getBillingPeriodLabel, getMostRecentCompletedBillingWeek } from "./period";
 import { buildInvoiceSubject } from "./invoice";
+import { buildSubmissionEmailRecipients } from "./email-recipients";
 import { sendBillingSubmissionEmail } from "./email";
 import { getUserBillingProfile, isUserBillingProfileComplete, toUserBillingProfileInput } from "./user-profile";
 
@@ -75,6 +76,14 @@ export async function getCurrentBillingState(user: AppUser) {
       : null;
 
   const toRecipients = (settings?.toRecipientsJson as string[] | undefined) ?? [];
+  const ccFromSettings = (settings?.ccRecipientsJson as string[] | undefined) ?? [];
+  const bccFromSettings = (settings?.bccRecipientsJson as string[] | undefined) ?? [];
+  const emailRecipients = buildSubmissionEmailRecipients({
+    submitterEmail: user.email,
+    toRecipients,
+    ccRecipients: ccFromSettings,
+    bccRecipients: bccFromSettings,
+  });
 
   return {
     period,
@@ -85,6 +94,8 @@ export async function getCurrentBillingState(user: AppUser) {
     profile: profileInput,
     profileComplete,
     billToRecipients: toRecipients,
+    submitterEmail: user.email,
+    emailRecipients,
   };
 }
 
@@ -128,12 +139,19 @@ export async function createBillingSubmission({
   }
 
   const settings = current.settings;
-  const toRecipients = (settings?.toRecipientsJson as string[] | undefined) ?? [];
-  const ccRecipients = (settings?.ccRecipientsJson as string[] | undefined) ?? [];
-  const bccRecipients = (settings?.bccRecipientsJson as string[] | undefined) ?? [];
-  if (!toRecipients.length) {
+  const toFromSettings = (settings?.toRecipientsJson as string[] | undefined) ?? [];
+  const ccFromSettings = (settings?.ccRecipientsJson as string[] | undefined) ?? [];
+  const bccFromSettings = (settings?.bccRecipientsJson as string[] | undefined) ?? [];
+  if (!toFromSettings.length) {
     throw new Error("Billing recipients are not configured for your company.");
   }
+
+  const { to: toRecipients, cc: ccRecipients, bcc: bccRecipients } = buildSubmissionEmailRecipients({
+    submitterEmail: user.email,
+    toRecipients: toFromSettings,
+    ccRecipients: ccFromSettings,
+    bccRecipients: bccFromSettings,
+  });
 
   const nextAttempt = (current.latestSubmission?.submissionAttemptNumber ?? 0) + 1;
   const periodLabel = getBillingPeriodLabel(current.period.periodStartDate, current.period.periodEndDate);

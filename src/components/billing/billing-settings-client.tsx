@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { EmailRecipientTags } from "@/components/billing/email-recipient-tags";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { buildSubmissionEmailRecipients } from "@/lib/services/billing/email-recipients";
 
 type CompanyOption = { id: string; name: string; workspaceId: string | null; companyIds: string[] };
 
@@ -20,7 +22,13 @@ type SettingsResponse = {
   availableCompanies: CompanyOption[];
 };
 
-export function BillingSettingsClient({ isSuperAdmin }: { isSuperAdmin: boolean }) {
+export function BillingSettingsClient({
+  isSuperAdmin,
+  currentUserEmail,
+}: {
+  isSuperAdmin: boolean;
+  currentUserEmail: string;
+}) {
   const [companyId, setCompanyId] = useState<string>("");
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [toRecipients, setToRecipients] = useState("");
@@ -57,6 +65,20 @@ export function BillingSettingsClient({ isSuperAdmin }: { isSuperAdmin: boolean 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, []);
+
+  const emailPreview = useMemo(() => {
+    const split = (value: string) =>
+      value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    return buildSubmissionEmailRecipients({
+      submitterEmail: currentUserEmail,
+      toRecipients: split(toRecipients),
+      ccRecipients: split(ccRecipients),
+      bccRecipients: split(bccRecipients),
+    });
+  }, [bccRecipients, ccRecipients, currentUserEmail, toRecipients]);
 
   async function save() {
     if (!companyId) return;
@@ -129,6 +151,14 @@ export function BillingSettingsClient({ isSuperAdmin }: { isSuperAdmin: boolean 
         </label>
         <label className="space-y-1 text-sm text-zinc-300">
           CC recipients (comma separated)
+          <p className="text-xs text-zinc-500">
+            The person submitting an invoice is always CC&apos;d at their login email. When you submit, that is:
+          </p>
+          <div className="flex flex-wrap gap-2 py-1">
+            <span className="inline-flex items-center rounded-full border border-indigo-500/50 bg-indigo-500/15 px-2.5 py-1 text-xs text-indigo-200">
+              {currentUserEmail} — invoice submitter (always included)
+            </span>
+          </div>
           <input className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-sm" value={ccRecipients} onChange={(e) => setCcRecipients(e.target.value)} />
         </label>
         <label className="space-y-1 text-sm text-zinc-300">
@@ -152,6 +182,17 @@ export function BillingSettingsClient({ isSuperAdmin }: { isSuperAdmin: boolean 
           <input type="checkbox" checked={overdueEnabled} onChange={(e) => setOverdueEnabled(e.target.checked)} />
           Show overdue banners
         </label>
+
+        <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
+          <p className="mb-3 text-sm font-medium text-zinc-200">Email preview (per submission)</p>
+          <EmailRecipientTags
+            to={emailPreview.to}
+            cc={emailPreview.cc}
+            bcc={emailPreview.bcc}
+            submitterEmail={currentUserEmail}
+          />
+        </div>
+
         <Button onClick={save} disabled={saving}>
           {saving ? "Saving..." : "Save Billing Settings"}
         </Button>

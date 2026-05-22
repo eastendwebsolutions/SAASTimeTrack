@@ -8,6 +8,6 @@ export default async function BillingSettingsPage() {
     return <p className="text-zinc-400">Billing settings admin access required.</p>;
   }
 
-  return <BillingSettingsClient isSuperAdmin={user.role === "super_admin"} />;
+  return <BillingSettingsClient isSuperAdmin={user.role === "super_admin"} currentUserEmail={user.email} />;
 }
 
