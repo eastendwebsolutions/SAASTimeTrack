@@ -60,6 +60,22 @@ export function getBillingWeekBounds(now = new Date()) {
   return { periodStart, periodEnd };
 }
 
+export const SPARTAN_RESTORATION_COMPANY_NAME = "spartanrestoration.com";
+
+/** Mon May 18 – Sun May 24, 2026 (Eastern), first invoice week for Spartan Restoration. */
+export function getSpartanRestorationInauguralBillingWeek() {
+  const periodStart = new Date(Date.UTC(2026, 4, 18, 4, 0, 0));
+  const periodEnd = new Date(Date.UTC(2026, 4, 24, 4, 0, 0));
+  return { periodStart, periodEnd };
+}
+
+export function getBillingPeriodBounds(companyName: string | null | undefined, now = new Date()) {
+  if (companyName === SPARTAN_RESTORATION_COMPANY_NAME) {
+    return getSpartanRestorationInauguralBillingWeek();
+  }
+  return getMostRecentCompletedBillingWeek(now);
+}
+
 export function getMostRecentCompletedBillingWeek(now = new Date()) {
   const { periodStart, periodEnd } = getBillingWeekBounds(now);
   const nowNyDate = toDateOnlyUtc(getNyDateParts(now));

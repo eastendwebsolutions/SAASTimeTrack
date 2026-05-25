@@ -11,7 +11,7 @@ import {
 import { billingSubmissionCreateSchema, type InvoiceLineItem, type UserBillingSnapshot } from "@/lib/validation/billing";
 import { listWorkspaceOptionsForSuperAdmin } from "@/lib/services/workspace-options";
 import { resolveWorkspaceScopedCompanyIdsForSuperAdmin } from "@/lib/services/workspace-options";
-import { formatSubmittedAtEasternLabel, getBillingPeriodLabel, getMostRecentCompletedBillingWeek } from "./period";
+import { formatSubmittedAtEasternLabel, getBillingPeriodBounds, getBillingPeriodLabel } from "./period";
 import { buildInvoiceSubject } from "./invoice";
 import { buildSubmissionEmailRecipients } from "./email-recipients";
 import { sendBillingSubmissionEmail } from "./email";
@@ -25,7 +25,11 @@ type AppUser = {
 };
 
 export async function ensureBillingPeriod(companyId: string, now = new Date()) {
-  const { periodStart, periodEnd } = getMostRecentCompletedBillingWeek(now);
+  const company = await db.query.companies.findFirst({
+    where: eq(companies.id, companyId),
+    columns: { name: true },
+  });
+  const { periodStart, periodEnd } = getBillingPeriodBounds(company?.name, now);
   const label = getBillingPeriodLabel(periodStart, periodEnd);
 
   const existing = await db.query.billingPeriods.findFirst({
