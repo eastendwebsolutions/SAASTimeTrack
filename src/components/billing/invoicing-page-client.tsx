@@ -16,6 +16,22 @@ import {
 
 type BillingCurrentResponse = {
   period: { id: string; label: string };
+  selectedPeriodId: string;
+  periodOptions: Array<{
+    id: string;
+    label: string;
+    periodStartDate: string;
+    periodEndDate: string;
+    latestSubmission: null | {
+      id: string;
+      subject: string;
+      invoiceNumber: string | null;
+      status: "submitted" | "accepted" | "needs_resubmission" | "failed";
+      emailStatus: "pending" | "sent" | "failed";
+      submissionAttemptNumber: number;
+    };
+    canSubmit: boolean;
+  }>;
   latestSubmission: null | {
     id: string;
     subject: string;
@@ -101,6 +117,7 @@ function getSubmitBlockedReason(current: BillingCurrentResponse | null) {
 
 export function InvoicingPageClient({ userDisplayName, userEmail }: { userDisplayName: string; userEmail: string }) {
   const [current, setCurrent] = useState<BillingCurrentResponse | null>(null);
+  const [selectedPeriodId, setSelectedPeriodId] = useState("");
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -121,6 +138,7 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
       return;
     }
     setCurrent(currentJson);
+    setSelectedPeriodId(currentJson.selectedPeriodId ?? "");
     setHistory(Array.isArray(historyJson) ? historyJson : []);
     setLoading(false);
   }
@@ -129,18 +147,23 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
     void load();
   }, []);
 
-  const firstLinePlaceholder = defaultFirstLineDescription(current?.period?.label);
+  const selectedPeriod =
+    current?.periodOptions?.find((option) => option.id === selectedPeriodId) ??
+    current?.periodOptions?.[0] ??
+    null;
+
+  const firstLinePlaceholder = defaultFirstLineDescription(selectedPeriod?.label);
 
   useEffect(() => {
-    if (!current?.period?.label) return;
-    const suggested = defaultFirstLineDescription(current.period.label);
+    if (!selectedPeriod?.label) return;
+    const suggested = defaultFirstLineDescription(selectedPeriod.label);
     setLineItems((prev) => {
       if (!prev.length) return [newLineItem(suggested)];
       const [first, ...rest] = prev;
       if (first.description.trim()) return prev;
       return [{ ...first, description: suggested }, ...rest];
     });
-  }, [current?.period?.label]);
+  }, [selectedPeriod?.label]);
 
   const parsedLineItems = useMemo(() => parseLineItems(lineItems), [lineItems]);
   const total = useMemo(() => sumInvoiceLineItems(parsedLineItems), [parsedLineItems]);
@@ -154,11 +177,19 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
     };
   }, [current?.profile, userDisplayName, userEmail]);
 
+  const selectedPeriodState = current
+    ? {
+        ...current,
+        canSubmit: selectedPeriod?.canSubmit ?? false,
+        latestSubmission: selectedPeriod?.latestSubmission ?? null,
+      }
+    : null;
+
   const formValidationError = getFormValidationError(invoiceNumber, lineItems);
-  const submitBlockedReason = getSubmitBlockedReason(current);
+  const submitBlockedReason = getSubmitBlockedReason(selectedPeriodState);
   const billingRecipientsConfigured = Boolean(current?.billToRecipients?.length);
   const isFormReady = Boolean(billingSnapshot && current?.profileComplete && billingRecipientsConfigured && !formValidationError);
-  const canSubmitNow = Boolean(showPreview && isFormReady && current?.canSubmit && !submitting);
+  const canSubmitNow = Boolean(showPreview && isFormReady && selectedPeriod?.canSubmit && !submitting);
 
   function updateLineItem(id: string, patch: Partial<LineItemDraft>) {
     setLineItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
@@ -202,6 +233,7 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
           invoiceNumber: invoiceNumber.trim(),
           lineItems: parsedLineItems,
           bodyContent: notes.trim() || null,
+          billingPeriodId: selectedPeriod?.id ?? null,
         }),
       });
       const json = await res.json();
@@ -211,7 +243,7 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
       }
 
       setInvoiceNumber("");
-      setLineItems([newLineItem(defaultFirstLineDescription(current?.period?.label))]);
+      setLineItems([newLineItem(defaultFirstLineDescription(selectedPeriod?.label ?? current?.period?.label))]);
       setNotes("");
       setShowPreview(false);
       await load();
@@ -270,15 +302,31 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
 
       <Card className="space-y-3 p-5">
         <h2 className="text-lg font-medium">Current Period Status</h2>
-        <p className="text-sm text-zinc-300">Billing Period: {current?.period?.label ?? "N/A"}</p>
+        <label className="space-y-1 text-sm text-zinc-300">
+          Billing Period
+          <select
+            value={selectedPeriod?.id ?? ""}
+            onChange={(event) => {
+              setSelectedPeriodId(event.target.value);
+              setShowPreview(false);
+            }}
+            className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-sm text-zinc-200"
+          >
+            {(current?.periodOptions ?? []).map((period) => (
+              <option key={period.id} value={period.id}>
+                {period.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <p className="text-sm text-zinc-300">
           Status:{" "}
-          <span className={`rounded px-2 py-1 text-xs capitalize ${badgeClass(current?.latestSubmission?.status ?? "not_submitted")}`}>
-            {current?.latestSubmission?.status ?? "not submitted"}
+          <span className={`rounded px-2 py-1 text-xs capitalize ${badgeClass(selectedPeriod?.latestSubmission?.status ?? "not_submitted")}`}>
+            {selectedPeriod?.latestSubmission?.status ?? "not submitted"}
           </span>
         </p>
-        {current?.latestSubmission?.invoiceNumber ? (
-          <p className="text-sm text-zinc-400">Latest invoice #: {current.latestSubmission.invoiceNumber}</p>
+        {selectedPeriod?.latestSubmission?.invoiceNumber ? (
+          <p className="text-sm text-zinc-400">Latest invoice #: {selectedPeriod.latestSubmission.invoiceNumber}</p>
         ) : null}
         {current?.settings?.submissionInstructions ? (
           <p className="text-sm text-zinc-400">{current.settings.submissionInstructions}</p>
@@ -376,7 +424,7 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
         </div>
       </Card>
 
-      {showPreview && billingSnapshot && current?.period ? (
+      {showPreview && billingSnapshot && selectedPeriod ? (
         <Card id="invoice-preview-panel" className="space-y-4 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-medium">Invoice Preview</h2>
@@ -384,7 +432,7 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
           </div>
           <InvoicePreview
             invoiceNumber={invoiceNumber.trim()}
-            periodLabel={current.period.label}
+            periodLabel={selectedPeriod.label}
             billToRecipients={current.billToRecipients}
             billingSnapshot={billingSnapshot}
             lineItems={parsedLineItems}

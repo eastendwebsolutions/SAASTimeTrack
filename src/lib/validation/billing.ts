@@ -35,6 +35,7 @@ export const billingSubmissionCreateSchema = z.object({
   invoiceNumber: z.string().trim().min(1, "Invoice number is required.").max(100),
   lineItems: z.array(invoiceLineItemSchema).min(1, "At least one line item is required.").max(50),
   bodyContent: z.string().max(5000).optional().nullable(),
+  billingPeriodId: z.string().uuid().optional().nullable(),
 });
 
 export const userBillingProfileSchema = z.object({

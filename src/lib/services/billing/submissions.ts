@@ -11,7 +11,7 @@ import {
 import { billingSubmissionCreateSchema, type InvoiceLineItem, type UserBillingSnapshot } from "@/lib/validation/billing";
 import { listWorkspaceOptionsForSuperAdmin } from "@/lib/services/workspace-options";
 import { resolveWorkspaceScopedCompanyIdsForSuperAdmin } from "@/lib/services/workspace-options";
-import { formatSubmittedAtEasternLabel, getBillingPeriodBounds, getBillingPeriodLabel } from "./period";
+import { formatSubmittedAtEasternLabel, getBillingPeriodLabel, getBillingWeekBounds } from "./period";
 import { buildInvoiceSubject } from "./invoice";
 import { buildSubmissionEmailRecipients } from "./email-recipients";
 import { sendBillingSubmissionEmail } from "./email";
@@ -24,14 +24,21 @@ type AppUser = {
   companyId: string;
 };
 
-export async function ensureBillingPeriod(companyId: string, now = new Date()) {
-  const company = await db.query.companies.findFirst({
-    where: eq(companies.id, companyId),
-    columns: { name: true },
-  });
-  const { periodStart, periodEnd } = getBillingPeriodBounds(company?.name, now);
-  const label = getBillingPeriodLabel(periodStart, periodEnd);
+const BILLING_LOOKBACK_WEEKS = 8;
 
+type BillingPeriodState = {
+  period: typeof billingPeriods.$inferSelect;
+  latestSubmission: (typeof billingSubmissions.$inferSelect) | null;
+  canSubmit: boolean;
+};
+
+function addUtcDays(base: Date, days: number) {
+  const next = new Date(base);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+async function ensureBillingPeriodForBounds(companyId: string, periodStart: Date, periodEnd: Date) {
   const existing = await db.query.billingPeriods.findFirst({
     where: and(
       eq(billingPeriods.companyId, companyId),
@@ -48,27 +55,66 @@ export async function ensureBillingPeriod(companyId: string, now = new Date()) {
       periodStartDate: periodStart,
       periodEndDate: periodEnd,
       timezone: "America/New_York",
-      label,
+      label: getBillingPeriodLabel(periodStart, periodEnd),
     })
     .returning();
   return created;
 }
 
+export async function ensureBillingPeriod(companyId: string, now = new Date()) {
+  const { periodStart, periodEnd } = getBillingWeekBounds(now);
+  return ensureBillingPeriodForBounds(companyId, periodStart, periodEnd);
+}
+
+async function getSelectableBillingPeriods(user: AppUser, now = new Date()) {
+  const { periodStart: currentStart, periodEnd: currentEnd } = getBillingWeekBounds(now);
+  const periods = await Promise.all(
+    Array.from({ length: BILLING_LOOKBACK_WEEKS + 1 }, (_, index) => {
+      const offset = index * 7;
+      return ensureBillingPeriodForBounds(
+        user.companyId,
+        addUtcDays(currentStart, -offset),
+        addUtcDays(currentEnd, -offset),
+      );
+    }),
+  );
+
+  const periodIds = periods.map((period) => period.id);
+  const submissions = await db.query.billingSubmissions.findMany({
+    where: and(eq(billingSubmissions.userId, user.id), inArray(billingSubmissions.billingPeriodId, periodIds)),
+    orderBy: (table) => [asc(table.submissionAttemptNumber)],
+  });
+
+  const latestByPeriod = new Map<string, (typeof billingSubmissions.$inferSelect) | null>();
+  for (const period of periods) latestByPeriod.set(period.id, null);
+  for (const submission of submissions) {
+    latestByPeriod.set(submission.billingPeriodId, submission);
+  }
+
+  return periods.map((period): BillingPeriodState => {
+    const latestSubmission = latestByPeriod.get(period.id) ?? null;
+    return {
+      period,
+      latestSubmission,
+      canSubmit: canSubmitForLatestSubmission(latestSubmission),
+    };
+  });
+}
+
 export async function getCurrentBillingState(user: AppUser) {
-  const period = await ensureBillingPeriod(user.companyId);
+  const periodStates = await getSelectableBillingPeriods(user);
+  const selected = periodStates[0];
+  if (!selected) {
+    throw new Error("No billing periods available.");
+  }
   const settings = await db.query.billingSettings.findFirst({
     where: eq(billingSettings.companyId, user.companyId),
   });
   const profile = await getUserBillingProfile(user.id);
   const profileInput = toUserBillingProfileInput(profile);
 
-  const submissions = await db.query.billingSubmissions.findMany({
-    where: and(eq(billingSubmissions.userId, user.id), eq(billingSubmissions.billingPeriodId, period.id)),
-    orderBy: (table) => [asc(table.submissionAttemptNumber)],
-  });
-
-  const latest = submissions[submissions.length - 1] ?? null;
-  const canSubmit = canSubmitForLatestSubmission(latest);
+  const latest = selected.latestSubmission;
+  const canSubmit = selected.canSubmit;
   const profileComplete = isUserBillingProfileComplete(profileInput);
 
   const overdueEnabled = settings?.overdueBannerEnabled ?? true;
@@ -76,7 +122,7 @@ export async function getCurrentBillingState(user: AppUser) {
     overdueEnabled && (!latest || latest.status === "needs_resubmission")
       ? latest?.status === "needs_resubmission"
         ? `Your invoice needs resubmission.`
-        : `Your invoice for ${period.label} has not been submitted.`
+        : `Your invoice for ${selected.period.label} has not been submitted.`
       : null;
 
   const toRecipients = (settings?.toRecipientsJson as string[] | undefined) ?? [];
@@ -90,7 +136,16 @@ export async function getCurrentBillingState(user: AppUser) {
   });
 
   return {
-    period,
+    period: selected.period,
+    selectedPeriodId: selected.period.id,
+    periodOptions: periodStates.map((state) => ({
+      id: state.period.id,
+      label: state.period.label,
+      periodStartDate: state.period.periodStartDate,
+      periodEndDate: state.period.periodEndDate,
+      latestSubmission: state.latestSubmission,
+      canSubmit: state.canSubmit,
+    })),
     latestSubmission: latest,
     canSubmit,
     warning,
@@ -120,12 +175,14 @@ export async function createBillingSubmission({
   bodyContent,
   invoiceNumber,
   lineItems,
+  billingPeriodId,
 }: {
   user: AppUser;
   userName: string;
   bodyContent: string | null;
   invoiceNumber: string;
   lineItems: InvoiceLineItem[];
+  billingPeriodId?: string | null;
 }) {
   const parsed = billingSubmissionCreateSchema.parse({
     invoiceNumber,
@@ -135,11 +192,16 @@ export async function createBillingSubmission({
 
   const now = new Date();
   const current = await getCurrentBillingState(user);
+  const selectedPeriod =
+    current.periodOptions.find((option) => option.id === (billingPeriodId ?? current.selectedPeriodId)) ?? null;
+  if (!selectedPeriod) {
+    throw new Error("Selected billing period is not available.");
+  }
   if (!current.profileComplete || !current.profile) {
     throw new Error("Complete your user billing information before submitting an invoice.");
   }
-  if (!current.canSubmit) {
-    throw new Error("Invoice submission already exists for this week.");
+  if (!selectedPeriod.canSubmit) {
+    throw new Error("Invoice submission already exists for this billing week.");
   }
 
   const settings = current.settings;
@@ -159,8 +221,8 @@ export async function createBillingSubmission({
     bccRecipients: bccFromSettings,
   });
 
-  const nextAttempt = (current.latestSubmission?.submissionAttemptNumber ?? 0) + 1;
-  const periodLabel = getBillingPeriodLabel(current.period.periodStartDate, current.period.periodEndDate);
+  const nextAttempt = (selectedPeriod.latestSubmission?.submissionAttemptNumber ?? 0) + 1;
+  const periodLabel = getBillingPeriodLabel(selectedPeriod.periodStartDate, selectedPeriod.periodEndDate);
   const submittedAtLocalLabel = formatSubmittedAtEasternLabel(now);
   const billingSnapshot: UserBillingSnapshot = {
     ...current.profile,
@@ -178,7 +240,7 @@ export async function createBillingSubmission({
     .values({
       companyId: user.companyId,
       userId: user.id,
-      billingPeriodId: current.period.id,
+      billingPeriodId: selectedPeriod.id,
       subject,
       bodyContent: parsed.bodyContent ?? null,
       invoiceNumber: parsed.invoiceNumber,
@@ -199,8 +261,8 @@ export async function createBillingSubmission({
       userName,
       userEmail: user.email,
       billToRecipients: toRecipients,
-      periodStart: current.period.periodStartDate,
-      periodEnd: current.period.periodEndDate,
+      periodStart: selectedPeriod.periodStartDate,
+      periodEnd: selectedPeriod.periodEndDate,
       submittedAt: now,
       userBody: parsed.bodyContent ?? null,
       defaultFooter: settings?.defaultBodyFooter ?? null,

@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   getBillingPeriodBounds,
   getBillingPeriodLabel,
+  getBillingWeekBounds,
   getMostRecentCompletedBillingWeek,
-  getSpartanRestorationInauguralBillingWeek,
 } from "./period";
 
 describe("billing period utilities", () => {
@@ -14,11 +14,12 @@ describe("billing period utilities", () => {
     expect(periodEnd.toISOString().slice(0, 10)).toBe("2026-04-24");
   });
 
-  it("uses May 18–24 2026 for Spartan Restoration companies", () => {
-    const { periodStart, periodEnd } = getBillingPeriodBounds("spartanrestoration.com");
-    expect(periodStart).toEqual(getSpartanRestorationInauguralBillingWeek().periodStart);
-    expect(periodEnd).toEqual(getSpartanRestorationInauguralBillingWeek().periodEnd);
-    expect(getBillingPeriodLabel(periodStart, periodEnd)).toBe("May 18, 2026 to May 24, 2026");
+  it("uses the current billing week regardless of company", () => {
+    const now = new Date("2026-05-28T16:00:00.000Z");
+    const expected = getBillingWeekBounds(now);
+    const { periodStart, periodEnd } = getBillingPeriodBounds("spartanrestoration.com", now);
+    expect(periodStart).toEqual(expected.periodStart);
+    expect(periodEnd).toEqual(expected.periodEnd);
   });
 
   it("formats billing labels using long month names", () => {

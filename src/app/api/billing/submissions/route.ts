@@ -16,6 +16,7 @@ export async function POST(request: Request) {
       bodyContent: parsed.bodyContent ?? null,
       invoiceNumber: parsed.invoiceNumber,
       lineItems: parsed.lineItems,
+      billingPeriodId: parsed.billingPeriodId ?? null,
     });
 
     return NextResponse.json({ submission }, { status: 201 });
