@@ -433,11 +433,11 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
           <InvoicePreview
             invoiceNumber={invoiceNumber.trim()}
             periodLabel={selectedPeriod.label}
-            billToRecipients={current.billToRecipients}
+            billToRecipients={current?.billToRecipients ?? []}
             billingSnapshot={billingSnapshot}
             lineItems={parsedLineItems}
             userBody={notes.trim() || null}
-            defaultFooter={current.settings?.defaultBodyFooter ?? null}
+            defaultFooter={current?.settings?.defaultBodyFooter ?? null}
           />
           {submitBlockedReason ? (
             <p className="rounded border border-amber-700/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-200">{submitBlockedReason}</p>
