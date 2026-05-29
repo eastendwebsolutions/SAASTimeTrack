@@ -7,6 +7,14 @@ import {
 } from "./period";
 
 describe("billing period utilities", () => {
+  it("uses Saturday through Friday for the current billing week", () => {
+    const now = new Date("2026-05-28T16:00:00.000Z");
+    const { periodStart, periodEnd } = getBillingWeekBounds(now);
+    expect(periodStart.toISOString().slice(0, 10)).toBe("2026-05-23");
+    expect(periodEnd.toISOString().slice(0, 10)).toBe("2026-05-29");
+    expect(getBillingPeriodLabel(periodStart, periodEnd)).toBe("May 23, 2026 to May 29, 2026");
+  });
+
   it("returns previous completed week when current week is in progress", () => {
     const now = new Date("2026-05-01T16:00:00.000Z");
     const { periodStart, periodEnd } = getMostRecentCompletedBillingWeek(now);

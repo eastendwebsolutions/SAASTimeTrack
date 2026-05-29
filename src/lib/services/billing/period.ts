@@ -14,6 +14,14 @@ const labelFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
 });
 
+/** Period bounds are stored as UTC calendar dates; format in UTC to avoid Eastern off-by-one labels. */
+const billingPeriodLabelFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: "UTC",
+  month: "long",
+  day: "numeric",
+  year: "numeric",
+});
+
 const weekdayFormatter = new Intl.DateTimeFormat("en-US", {
   timeZone: BILLING_TIMEZONE,
   weekday: "short",
@@ -80,7 +88,7 @@ export function getMostRecentCompletedBillingWeek(now = new Date()) {
 }
 
 export function getBillingPeriodLabel(periodStart: Date, periodEnd: Date) {
-  return `${labelFormatter.format(periodStart)} to ${labelFormatter.format(periodEnd)}`;
+  return `${billingPeriodLabelFormatter.format(periodStart)} to ${billingPeriodLabelFormatter.format(periodEnd)}`;
 }
 
 export function buildBillingSubject(userDisplayName: string, periodStart: Date, periodEnd: Date) {
