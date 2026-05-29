@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
 type BillingCurrentResponse = {
   period: { id: string; label: string };
   selectedPeriodId: string;
+  suggestedInvoiceNumber: string | null;
   periodOptions: Array<{
     id: string;
     label: string;
@@ -32,6 +33,7 @@ type BillingCurrentResponse = {
       submissionAttemptNumber: number;
     };
     canSubmit: boolean;
+    suggestedInvoiceNumber: string | null;
   }>;
   latestSubmission: null | {
     id: string;
@@ -161,6 +163,7 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
   const [lineItems, setLineItems] = useState<LineItemDraft[]>([newLineItem()]);
   const [notes, setNotes] = useState("");
   const [showPreview, setShowPreview] = useState(false);
+  const invoiceNumberTouched = useRef(false);
 
   async function load() {
     setLoading(true);
@@ -199,6 +202,11 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
       return [{ ...first, description: suggested }, ...rest];
     });
   }, [selectedPeriod?.label]);
+
+  useEffect(() => {
+    if (!selectedPeriod?.canSubmit || invoiceNumberTouched.current) return;
+    setInvoiceNumber(selectedPeriod.suggestedInvoiceNumber ?? "");
+  }, [selectedPeriod?.id, selectedPeriod?.canSubmit, selectedPeriod?.suggestedInvoiceNumber]);
 
   const parsedLineItems = useMemo(() => parseLineItems(lineItems), [lineItems]);
   const total = useMemo(() => sumInvoiceLineItems(parsedLineItems), [parsedLineItems]);
@@ -277,7 +285,7 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
         return;
       }
 
-      setInvoiceNumber("");
+      setInvoiceNumberTouched.current = false;
       setLineItems([newLineItem(defaultFirstLineDescription(selectedPeriod?.label ?? current?.period?.label))]);
       setNotes("");
       setShowPreview(false);
@@ -342,6 +350,7 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
           description="Defaults to the current work week. Choose an earlier week if you need to submit a missed invoice."
           value={selectedPeriod?.id ?? ""}
           onChange={(event) => {
+            invoiceNumberTouched.current = false;
             setSelectedPeriodId(event.target.value);
             setShowPreview(false);
           }}
@@ -386,10 +395,16 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
           Invoice Number
           <input
             value={invoiceNumber}
-            onChange={(event) => setInvoiceNumber(event.target.value)}
+            onChange={(event) => {
+              invoiceNumberTouched.current = true;
+              setInvoiceNumber(event.target.value);
+            }}
             className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-sm text-zinc-200"
             placeholder="e.g. INV-2026-014"
           />
+          {selectedPeriod?.canSubmit && selectedPeriod.suggestedInvoiceNumber && !invoiceNumberTouched.current ? (
+            <p className="text-xs text-zinc-500">Suggested from your last invoice — you can change this.</p>
+          ) : null}
         </label>
 
         <div className="space-y-3">

@@ -9,6 +9,18 @@ export function sumInvoiceLineItems(lineItems: InvoiceLineItem[]) {
   return lineItems.reduce((total, item) => total + item.amount, 0);
 }
 
+export function suggestNextInvoiceNumber(lastInvoiceNumber: string | null | undefined): string | null {
+  const trimmed = lastInvoiceNumber?.trim();
+  if (!trimmed) return null;
+
+  const match = trimmed.match(/(\d+)(?!.*\d)/);
+  if (!match || match.index === undefined) return null;
+
+  const digits = match[1];
+  const nextValue = String(Number.parseInt(digits, 10) + 1).padStart(digits.length, "0");
+  return `${trimmed.slice(0, match.index)}${nextValue}${trimmed.slice(match.index + digits.length)}`;
+}
+
 export function buildInvoiceSubject({
   billingSnapshot,
   invoiceNumber,

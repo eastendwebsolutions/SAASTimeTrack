@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   billingPeriods,
@@ -12,7 +12,7 @@ import { billingSubmissionCreateSchema, type InvoiceLineItem, type UserBillingSn
 import { listWorkspaceOptionsForSuperAdmin } from "@/lib/services/workspace-options";
 import { resolveWorkspaceScopedCompanyIdsForSuperAdmin } from "@/lib/services/workspace-options";
 import { formatSubmittedAtEasternLabel, getBillingPeriodLabel, getBillingWeekBounds, getPeriodKey, withComputedBillingPeriodLabel } from "./period";
-import { buildInvoiceSubject } from "./invoice";
+import { buildInvoiceSubject, suggestNextInvoiceNumber } from "./invoice";
 import { buildSubmissionEmailRecipients } from "./email-recipients";
 import { sendBillingSubmissionEmail } from "./email";
 import { getUserBillingProfile, isUserBillingProfileComplete, toUserBillingProfileInput } from "./user-profile";
@@ -123,12 +123,69 @@ async function getSelectableBillingPeriods(user: AppUser, now = new Date()) {
   });
 }
 
+export function canSubmitForLatestSubmission(
+  latest:
+    | null
+    | {
+        status: "submitted" | "accepted" | "needs_resubmission" | "failed";
+        emailStatus: "pending" | "sent" | "failed";
+      },
+) {
+  return !latest || latest.status === "needs_resubmission" || (latest.status === "failed" && latest.emailStatus === "failed");
+}
+
+export async function getLastSubmittedInvoiceNumber(userId: string, companyId: string) {
+  const row = await db.query.billingSubmissions.findFirst({
+    where: and(
+      eq(billingSubmissions.userId, userId),
+      eq(billingSubmissions.companyId, companyId),
+      isNotNull(billingSubmissions.invoiceNumber),
+    ),
+    orderBy: (table) => [desc(table.submittedAtUtc)],
+    columns: { invoiceNumber: true },
+  });
+
+  return row?.invoiceNumber?.trim() || null;
+}
+
+export function suggestInvoiceNumberForPeriod(
+  state: BillingPeriodState,
+  lastGlobalInvoiceNumber: string | null,
+): string | null {
+  if (!state.canSubmit) return null;
+
+  const latest = state.latestSubmission;
+  if (
+    latest?.invoiceNumber &&
+    (latest.status === "needs_resubmission" || latest.status === "failed")
+  ) {
+    return latest.invoiceNumber.trim();
+  }
+
+  return suggestNextInvoiceNumber(lastGlobalInvoiceNumber);
+}
+
+function mapPeriodOption(state: BillingPeriodState, lastGlobalInvoiceNumber: string | null) {
+  return {
+    id: state.period.id,
+    label: state.period.label,
+    periodStartDate: state.period.periodStartDate,
+    periodEndDate: state.period.periodEndDate,
+    latestSubmission: state.latestSubmission,
+    canSubmit: state.canSubmit,
+    suggestedInvoiceNumber: suggestInvoiceNumberForPeriod(state, lastGlobalInvoiceNumber),
+  };
+}
+
 export async function getCurrentBillingState(user: AppUser) {
   const periodStates = await getSelectableBillingPeriods(user);
   const selected = periodStates[0];
   if (!selected) {
     throw new Error("No billing periods available.");
   }
+  const lastSubmittedInvoiceNumber = await getLastSubmittedInvoiceNumber(user.id, user.companyId);
+  const periodOptions = periodStates.map((state) => mapPeriodOption(state, lastSubmittedInvoiceNumber));
+  const selectedOption = periodOptions[0];
   const settings = await db.query.billingSettings.findFirst({
     where: eq(billingSettings.companyId, user.companyId),
   });
@@ -160,14 +217,8 @@ export async function getCurrentBillingState(user: AppUser) {
   return {
     period: selected.period,
     selectedPeriodId: selected.period.id,
-    periodOptions: periodStates.map((state) => ({
-      id: state.period.id,
-      label: state.period.label,
-      periodStartDate: state.period.periodStartDate,
-      periodEndDate: state.period.periodEndDate,
-      latestSubmission: state.latestSubmission,
-      canSubmit: state.canSubmit,
-    })),
+    suggestedInvoiceNumber: selectedOption?.suggestedInvoiceNumber ?? null,
+    periodOptions,
     latestSubmission: latest,
     canSubmit,
     warning,
@@ -178,17 +229,6 @@ export async function getCurrentBillingState(user: AppUser) {
     submitterEmail: user.email,
     emailRecipients,
   };
-}
-
-export function canSubmitForLatestSubmission(
-  latest:
-    | null
-    | {
-        status: "submitted" | "accepted" | "needs_resubmission" | "failed";
-        emailStatus: "pending" | "sent" | "failed";
-      },
-) {
-  return !latest || latest.status === "needs_resubmission" || (latest.status === "failed" && latest.emailStatus === "failed");
 }
 
 export async function createBillingSubmission({
