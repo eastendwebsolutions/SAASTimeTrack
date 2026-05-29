@@ -7,6 +7,7 @@ import { asanaConnections, companies, jiraConnections, mondayConnections, projec
 import { isMissingIntegrationSchemaError } from "@/lib/integrations/schema-compat";
 import { jiraRequest, refreshJiraAccessToken } from "@/lib/jira/client";
 import { fetchMondayMe, mondayGraphqlRequest, refreshMondayAccessToken } from "@/lib/monday/client";
+import { resolveCompanyIdForUser } from "@/lib/services/company-resolution";
 import { decrypt, encrypt } from "@/lib/utils/crypto";
 
 type AsanaWorkspacesResponse = { data: Array<{ gid: string; name: string }> };
@@ -188,7 +189,10 @@ async function fetchProjectByGidWithAuth(projectGid: string, authFetch: <T>(path
  * Tasks/subtasks: in those projects, kept only if assignee is this Asana user (API does not allow project + assignee=me).
  */
 export async function syncUserAsanaData(userId: string, type: "initial" | "periodic" | "manual" = "manual") {
-  const user = await db.query.users.findFirst({ where: eq(users.id, userId), columns: { id: true, companyId: true } });
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+    columns: { id: true, companyId: true, email: true },
+  });
   if (!user) {
     throw new Error("User not found");
   }
@@ -265,13 +269,20 @@ export async function syncUserAsanaData(userId: string, type: "initial" | "perio
     );
     const primaryWorkspace = workspaces.data[0];
     if (primaryWorkspace) {
+      const companyId = await resolveCompanyIdForUser({
+        userId,
+        email: user.email,
+        currentCompanyId: user.companyId,
+        asanaWorkspaceId: primaryWorkspace.gid,
+      });
+
       await db
         .update(companies)
         .set({
           name: truncateName(primaryWorkspace.name),
           asanaWorkspaceId: primaryWorkspace.gid,
         })
-        .where(eq(companies.id, user.companyId));
+        .where(eq(companies.id, companyId));
     }
 
     let hasProjectsProviderColumn = true;

@@ -3,6 +3,11 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { companies, companySettings, users } from "@/lib/db/schema";
 import { isMissingIntegrationSchemaError } from "@/lib/integrations/schema-compat";
+import {
+  findSharedCompanyForEmail,
+  isSharedCompanyEmail,
+  resolveCompanyIdForUser,
+} from "@/lib/services/company-resolution";
 
 const SUPER_ADMIN_EMAILS = new Set(["bryan@eastendwebsolutions.com"]);
 
@@ -56,6 +61,22 @@ export async function getOrCreateCurrentUser() {
   })();
 
   if (existing) {
+    const resolvedCompanyId = await resolveCompanyIdForUser({
+      userId: existing.id,
+      email: existing.email,
+      currentCompanyId: existing.companyId,
+    });
+    if (resolvedCompanyId !== existing.companyId) {
+      const [moved] = await db
+        .update(users)
+        .set({ companyId: resolvedCompanyId })
+        .where(eq(users.id, existing.id))
+        .returning();
+      if (moved) {
+        return moved;
+      }
+    }
+
     const clerkProfile = await currentUser();
     const desiredDisplayName = deriveDisplayName({
       firstName: clerkProfile?.firstName,
@@ -93,9 +114,17 @@ export async function getOrCreateCurrentUser() {
     email,
   });
 
-  const companyName = `${email.split("@")[0]}'s Company`;
-  const insertedCompany = await db.insert(companies).values({ name: companyName }).returning();
-  await db.insert(companySettings).values({ companyId: insertedCompany[0].id });
+  const sharedCompany = isSharedCompanyEmail(email) ? await findSharedCompanyForEmail(email) : null;
+  let targetCompanyId: string;
+
+  if (sharedCompany) {
+    targetCompanyId = sharedCompany.id;
+  } else {
+    const companyName = `${email.split("@")[0]}'s Company`;
+    const insertedCompany = await db.insert(companies).values({ name: companyName }).returning();
+    await db.insert(companySettings).values({ companyId: insertedCompany[0].id });
+    targetCompanyId = insertedCompany[0].id;
+  }
 
   const [created] = await db
     .insert(users)
@@ -104,7 +133,7 @@ export async function getOrCreateCurrentUser() {
       email,
       displayName,
       role: SUPER_ADMIN_EMAILS.has(email.toLowerCase()) ? "super_admin" : "user",
-      companyId: insertedCompany[0].id,
+      companyId: targetCompanyId,
     })
     .onConflictDoNothing({
       target: users.clerkUserId,
@@ -168,12 +197,12 @@ export async function getOrCreateCurrentUser() {
 
   try {
     return await db.query.users.findFirst({
-      where: and(eq(users.id, created.id), eq(users.companyId, insertedCompany[0].id)),
+      where: and(eq(users.id, created.id), eq(users.companyId, targetCompanyId)),
     });
   } catch (error) {
     if (!isMissingIntegrationSchemaError(error)) throw error;
     const fallback = await db.query.users.findFirst({
-      where: and(eq(users.id, created.id), eq(users.companyId, insertedCompany[0].id)),
+      where: and(eq(users.id, created.id), eq(users.companyId, targetCompanyId)),
       columns: {
         id: true,
         clerkUserId: true,
