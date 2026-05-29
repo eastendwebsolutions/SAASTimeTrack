@@ -285,7 +285,7 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
         return;
       }
 
-      setInvoiceNumberTouched.current = false;
+      invoiceNumberTouched.current = false;
       setLineItems([newLineItem(defaultFirstLineDescription(selectedPeriod?.label ?? current?.period?.label))]);
       setNotes("");
       setShowPreview(false);
