@@ -11,7 +11,7 @@ import {
 import { billingSubmissionCreateSchema, type InvoiceLineItem, type UserBillingSnapshot } from "@/lib/validation/billing";
 import { listWorkspaceOptionsForSuperAdmin } from "@/lib/services/workspace-options";
 import { resolveWorkspaceScopedCompanyIdsForSuperAdmin } from "@/lib/services/workspace-options";
-import { formatSubmittedAtEasternLabel, getBillingPeriodLabel, getBillingWeekBounds } from "./period";
+import { formatSubmittedAtEasternLabel, getBillingPeriodLabel, getBillingWeekBounds, getPeriodKey, withComputedBillingPeriodLabel } from "./period";
 import { buildInvoiceSubject } from "./invoice";
 import { buildSubmissionEmailRecipients } from "./email-recipients";
 import { sendBillingSubmissionEmail } from "./email";
@@ -39,14 +39,36 @@ function addUtcDays(base: Date, days: number) {
 }
 
 async function ensureBillingPeriodForBounds(companyId: string, periodStart: Date, periodEnd: Date) {
-  const existing = await db.query.billingPeriods.findFirst({
-    where: and(
-      eq(billingPeriods.companyId, companyId),
-      eq(billingPeriods.periodStartDate, periodStart),
-      eq(billingPeriods.periodEndDate, periodEnd),
-    ),
+  const label = getBillingPeriodLabel(periodStart, periodEnd);
+  const targetKey = getPeriodKey(periodStart, periodEnd);
+
+  const companyPeriods = await db.query.billingPeriods.findMany({
+    where: eq(billingPeriods.companyId, companyId),
   });
-  if (existing) return existing;
+  const existing = companyPeriods.find((row) => getPeriodKey(row.periodStartDate, row.periodEndDate) === targetKey);
+
+  if (existing) {
+    const needsUpdate =
+      existing.label !== label ||
+      existing.periodStartDate.getTime() !== periodStart.getTime() ||
+      existing.periodEndDate.getTime() !== periodEnd.getTime();
+
+    if (needsUpdate) {
+      const [updated] = await db
+        .update(billingPeriods)
+        .set({
+          label,
+          periodStartDate: periodStart,
+          periodEndDate: periodEnd,
+          updatedAt: new Date(),
+        })
+        .where(eq(billingPeriods.id, existing.id))
+        .returning();
+      return updated;
+    }
+
+    return existing;
+  }
 
   const [created] = await db
     .insert(billingPeriods)
@@ -55,7 +77,7 @@ async function ensureBillingPeriodForBounds(companyId: string, periodStart: Date
       periodStartDate: periodStart,
       periodEndDate: periodEnd,
       timezone: "America/New_York",
-      label: getBillingPeriodLabel(periodStart, periodEnd),
+      label,
     })
     .returning();
   return created;
@@ -94,7 +116,7 @@ async function getSelectableBillingPeriods(user: AppUser, now = new Date()) {
   return periods.map((period): BillingPeriodState => {
     const latestSubmission = latestByPeriod.get(period.id) ?? null;
     return {
-      period,
+      period: withComputedBillingPeriodLabel(period),
       latestSubmission,
       canSubmit: canSubmitForLatestSubmission(latestSubmission),
     };

@@ -111,3 +111,12 @@ export function getPeriodKey(periodStart: Date, periodEnd: Date) {
   return `${periodStart.toISOString().slice(0, 10)}:${periodEnd.toISOString().slice(0, 10)}`;
 }
 
+export function withComputedBillingPeriodLabel<T extends { periodStartDate: Date; periodEndDate: Date; label: string }>(
+  period: T,
+) {
+  return {
+    ...period,
+    label: getBillingPeriodLabel(period.periodStartDate, period.periodEndDate),
+  };
+}
+
