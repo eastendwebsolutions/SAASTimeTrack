@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import {
   COUNTRY_OPTIONS,
   OTHER_COUNTRY_OPTIONS,
@@ -17,8 +18,6 @@ import {
   userBillingProfileSchema,
   type UserBillingProfileInput,
 } from "@/lib/validation/billing";
-
-const selectClassName = "w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-sm text-zinc-200";
 
 function isKnownState(value: string) {
   return US_STATE_OPTIONS.includes(value as (typeof US_STATE_OPTIONS)[number]);
@@ -203,10 +202,9 @@ export function UserBillingSettingsClient() {
         </label>
         <label className="space-y-1 text-sm text-zinc-300">
           State (US)
-          <select
+          <Select
             value={profile.state}
             onChange={(event) => updateField("state", event.target.value)}
-            className={selectClassName}
           >
             <option value="">Select U.S. state (optional)</option>
             {profile.state && !isKnownState(profile.state) ? (
@@ -217,7 +215,7 @@ export function UserBillingSettingsClient() {
                 {state}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="space-y-1 text-sm text-zinc-300">
           State (other)
@@ -239,11 +237,10 @@ export function UserBillingSettingsClient() {
         </label>
         <label className="space-y-1 text-sm text-zinc-300 sm:col-span-2">
           <RequiredLabel>Country</RequiredLabel>
-          <select
+          <Select
             required
             value={profile.country}
             onChange={(event) => updateField("country", event.target.value)}
-            className={selectClassName}
           >
             <option value="">Select country</option>
             {profile.country && !isKnownCountry(profile.country) ? (
@@ -263,7 +260,7 @@ export function UserBillingSettingsClient() {
                 </option>
               ))}
             </optgroup>
-          </select>
+          </Select>
         </label>
         <label className="space-y-1 text-sm text-zinc-300">
           <RequiredLabel>Phone</RequiredLabel>
@@ -276,18 +273,17 @@ export function UserBillingSettingsClient() {
         </label>
         <label className="space-y-1 text-sm text-zinc-300">
           <RequiredLabel>Payment Account Type</RequiredLabel>
-          <select
+          <Select
             required
             value={profile.paymentAccountType}
             onChange={(event) => updateField("paymentAccountType", event.target.value)}
-            className={selectClassName}
           >
             {PAYMENT_ACCOUNT_TYPE_OPTIONS.map((type) => (
               <option key={type} value={type}>
                 {type}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="space-y-1 text-sm text-zinc-300">
           <RequiredLabel>Payment Account Address</RequiredLabel>

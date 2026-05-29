@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { formatPaymentAccountLineFromSnapshot } from "@/lib/constants/payment-account-options";
 import { formatInvoiceCurrency, sumInvoiceLineItems } from "@/lib/services/billing/invoice";
 import type { InvoiceLineItem, UserBillingSnapshot } from "@/lib/validation/billing";
@@ -96,26 +97,36 @@ export function BillingAdminSubmissionsClient({ isSuperAdmin, companyId }: { isS
 
       <Card className="flex flex-wrap items-end gap-3 p-4">
         {isSuperAdmin ? (
-          <label className="text-sm text-zinc-300">
-            Workspace
-            <select className="ml-2 rounded border border-zinc-700 bg-zinc-950 p-2 text-sm" value={companyFilter} onChange={(event) => setCompanyFilter(event.target.value)}>
+          <label className="flex flex-col gap-1.5 text-sm text-zinc-300 sm:flex-row sm:items-center">
+            <span className="font-medium text-zinc-200">Workspace</span>
+            <Select
+              wrapperClassName="sm:w-auto"
+              className="min-w-[12rem]"
+              value={companyFilter}
+              onChange={(event) => setCompanyFilter(event.target.value)}
+            >
               {companyOptions.map((company) => (
                 <option key={company.id} value={company.id}>
                   {company.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         ) : null}
-        <label className="text-sm text-zinc-300">
-          Status
-          <select className="ml-2 rounded border border-zinc-700 bg-zinc-950 p-2 text-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+        <label className="flex flex-col gap-1.5 text-sm text-zinc-300 sm:flex-row sm:items-center">
+          <span className="font-medium text-zinc-200">Status</span>
+          <Select
+            wrapperClassName="sm:w-auto"
+            className="min-w-[11rem]"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+          >
             <option value="">All</option>
             <option value="submitted">Submitted</option>
             <option value="accepted">Accepted</option>
             <option value="needs_resubmission">Needs Resubmission</option>
             <option value="failed">Failed</option>
-          </select>
+          </Select>
         </label>
       </Card>
 

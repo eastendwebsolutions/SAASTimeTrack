@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 
 type Props = {
   initialTimezone: string;
@@ -46,9 +47,8 @@ export function TimezonePreferenceForm({ initialTimezone }: Props) {
       <label className="block text-sm text-zinc-300" htmlFor="user-timezone">
         Timezone
       </label>
-      <select
+      <Select
         id="user-timezone"
-        className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-sm"
         value={timezone}
         onChange={(event) => setTimezone(event.target.value)}
       >
@@ -57,7 +57,7 @@ export function TimezonePreferenceForm({ initialTimezone }: Props) {
             {zone}
           </option>
         ))}
-      </select>
+      </Select>
       <div className="flex items-center gap-3">
         <Button type="button" onClick={onSave} disabled={isSaving}>
           {isSaving ? "Saving..." : "Save timezone"}

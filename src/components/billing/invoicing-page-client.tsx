@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SelectField } from "@/components/ui/select";
 import { EmailRecipientTags } from "@/components/billing/email-recipient-tags";
 import { InvoicePreview } from "@/components/billing/invoice-preview";
 import { formatInvoiceCurrency, sumInvoiceLineItems } from "@/lib/services/billing/invoice";
@@ -302,23 +303,33 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
 
       <Card className="space-y-3 p-5">
         <h2 className="text-lg font-medium">Current Period Status</h2>
-        <label className="space-y-1 text-sm text-zinc-300">
-          Billing Period
-          <select
-            value={selectedPeriod?.id ?? ""}
-            onChange={(event) => {
-              setSelectedPeriodId(event.target.value);
-              setShowPreview(false);
-            }}
-            className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-sm text-zinc-200"
-          >
-            {(current?.periodOptions ?? []).map((period) => (
+        <SelectField
+          label="Billing Period"
+          description="Defaults to the current work week. Choose an earlier week if you need to submit a missed invoice."
+          value={selectedPeriod?.id ?? ""}
+          onChange={(event) => {
+            setSelectedPeriodId(event.target.value);
+            setShowPreview(false);
+          }}
+        >
+          {(current?.periodOptions ?? []).map((period, index) => {
+            const status = period.latestSubmission?.status;
+            const suffix =
+              index === 0
+                ? " — Current week"
+                : status === "submitted" || status === "accepted"
+                  ? " — Submitted"
+                  : status === "needs_resubmission"
+                    ? " — Resubmit"
+                    : "";
+            return (
               <option key={period.id} value={period.id}>
                 {period.label}
+                {suffix}
               </option>
-            ))}
-          </select>
-        </label>
+            );
+          })}
+        </SelectField>
         <p className="text-sm text-zinc-300">
           Status:{" "}
           <span className={`rounded px-2 py-1 text-xs capitalize ${badgeClass(selectedPeriod?.latestSubmission?.status ?? "not_submitted")}`}>

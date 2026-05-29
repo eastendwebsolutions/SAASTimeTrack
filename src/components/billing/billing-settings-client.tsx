@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { EmailRecipientTags } from "@/components/billing/email-recipient-tags";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { buildSubmissionEmailRecipients } from "@/lib/services/billing/email-recipients";
 
 type CompanyOption = { id: string; name: string; workspaceId: string | null; companyIds: string[] };
@@ -124,10 +125,9 @@ export function BillingSettingsClient({
       {error ? <Card className="border-rose-600/50 bg-rose-900/20 p-4 text-rose-200">{error}</Card> : null}
       <Card className="space-y-4 p-5">
         {isSuperAdmin ? (
-          <label className="space-y-1 text-sm text-zinc-300">
-            Company
-            <select
-              className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-sm"
+          <label className="block space-y-1.5 text-sm text-zinc-300">
+            <span className="font-medium text-zinc-200">Company</span>
+            <Select
               value={companyId}
               onChange={(event) => {
                 const next = event.target.value;
@@ -140,7 +140,7 @@ export function BillingSettingsClient({
                   {company.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         ) : null}
 
