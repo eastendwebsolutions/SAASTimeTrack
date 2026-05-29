@@ -82,6 +82,40 @@ function defaultFirstLineDescription(periodLabel: string | undefined) {
   return `Billing Period: ${periodLabel}`;
 }
 
+type PeriodOption = BillingCurrentResponse["periodOptions"][number];
+
+function formatBillingPeriodSubmissionStatus(period: PeriodOption) {
+  const status = period.latestSubmission?.status;
+  if (!status || status === "failed") return "Pending submission";
+  if (status === "submitted" || status === "accepted") return "Submitted";
+  if (status === "needs_resubmission") return "Resubmission required";
+  return "Pending submission";
+}
+
+function formatBillingPeriodOptionLabel(period: PeriodOption, isCurrentWeek: boolean) {
+  const parts = [period.label];
+  if (isCurrentWeek) parts.push("Current week");
+  parts.push(formatBillingPeriodSubmissionStatus(period));
+  return parts.join(" · ");
+}
+
+function formatPeriodStatusLabel(status: PeriodOption["latestSubmission"]) {
+  if (!status) return "Pending submission";
+  if (status.status === "submitted" || status.status === "accepted") return "Submitted";
+  if (status.status === "needs_resubmission") return "Resubmission required";
+  if (status.status === "failed") return "Pending submission";
+  return "Pending submission";
+}
+
+function periodStatusBadgeClass(status: PeriodOption["latestSubmission"]) {
+  if (!status) return "bg-zinc-700/60 text-zinc-200";
+  if (status.status === "accepted") return "bg-emerald-500/20 text-emerald-300";
+  if (status.status === "submitted") return "bg-sky-500/20 text-sky-300";
+  if (status.status === "needs_resubmission") return "bg-amber-500/20 text-amber-300";
+  if (status.status === "failed") return "bg-zinc-700/60 text-zinc-200";
+  return "bg-zinc-700/60 text-zinc-200";
+}
+
 function parseLineItems(items: LineItemDraft[]): InvoiceLineItem[] {
   return items
     .map((item) => ({
@@ -312,28 +346,16 @@ export function InvoicingPageClient({ userDisplayName, userEmail }: { userDispla
             setShowPreview(false);
           }}
         >
-          {(current?.periodOptions ?? []).map((period, index) => {
-            const status = period.latestSubmission?.status;
-            const suffix =
-              index === 0
-                ? " — Current week"
-                : status === "submitted" || status === "accepted"
-                  ? " — Submitted"
-                  : status === "needs_resubmission"
-                    ? " — Resubmit"
-                    : "";
-            return (
-              <option key={period.id} value={period.id}>
-                {period.label}
-                {suffix}
-              </option>
-            );
-          })}
+          {(current?.periodOptions ?? []).map((period, index) => (
+            <option key={period.id} value={period.id}>
+              {formatBillingPeriodOptionLabel(period, index === 0)}
+            </option>
+          ))}
         </SelectField>
         <p className="text-sm text-zinc-300">
           Status:{" "}
-          <span className={`rounded px-2 py-1 text-xs capitalize ${badgeClass(selectedPeriod?.latestSubmission?.status ?? "not_submitted")}`}>
-            {selectedPeriod?.latestSubmission?.status ?? "not submitted"}
+          <span className={`rounded px-2 py-1 text-xs ${periodStatusBadgeClass(selectedPeriod?.latestSubmission ?? null)}`}>
+            {formatPeriodStatusLabel(selectedPeriod?.latestSubmission ?? null)}
           </span>
         </p>
         {selectedPeriod?.latestSubmission?.invoiceNumber ? (
